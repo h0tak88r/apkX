@@ -54,8 +54,10 @@ APKx uses YAML configuration files for regex patterns. Default patterns are incl
 
 ## Output Example
 
-    [+] Found AWS Access Key: AKIAXXXXXXXXXXXXXXXX in /path/to/file.java
-    [+] Found Generic API Key: api_key="abcdef1234567890" in /path/to/config.xml
+    [URLs]
+    - resources/assets/target.json: https://target.com
+    - resources/assets/target.json: https://target.com/secret.db
+
 
 ## Contributing
 
