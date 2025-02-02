@@ -1,83 +1,87 @@
-# APKx (APK Explorer)
+# APKX - Android APK Analysis Tool
 
-APKx is a high-performance tool written in Go for scanning Android APK files to discover sensitive information like URIs, endpoints, and secrets. It's inspired by [APKLeaks](https://github.com/dwisiswant0/apkleaks) but reimplemented in Go with enhanced features and YAML pattern support.
+APKX is a powerful static analysis tool for Android APK files that helps identify sensitive information, such as:
+- API Keys
+- OAuth Tokens
+- Firebase URLs
+- Email Addresses
+- Endpoints and URLs
+- And more...
 
 ## Features
 
-- 🚀 High-performance scanning using Go's concurrency
-- 📝 YAML-based pattern configuration
-- 🎨 Colored terminal output for better readability
-- 🔄 Automatic jadx download and setup
-- 🎯 Multiple regex pattern support
-- 📊 JSON output format support
-- 🔍 Concurrent file scanning
-- 🛠️ Easy to configure and extend
+- Fast APK decompilation using JADX
+- Comprehensive pattern matching for sensitive information
+- Clean and simple command-line interface
+- JSON output for easy integration with other tools
+- Customizable regex patterns
+
+## Requirements
+
+- Go 1.19 or later
+- JADX (for APK decompilation)
 
 ## Installation
 
-### Prerequisites
+```bash
+# Clone the repository
+git clone https://github.com/h0tak88r/apkx.git
+cd apkx
 
-- Go 1.19 or higher
-- Java Runtime Environment (JRE) for jadx
-
-### Installing from source
-
-    go install github.com/h0tak88r/apkx@latest
+# Build the project
+go build -o apkx cmd/apkx/main.go
+```
 
 ## Usage
 
-Basic usage:
+```bash
+# Basic usage
+./apkx -f app.apk
 
-    apkx -apk path/to/your.apk [options]
+# Specify custom output file
+./apkx -f app.apk -o results.json
 
-### Options
+# Use custom patterns file
+./apkx -f app.apk -r patterns.yaml
+```
 
-    -apk string       Path to APK file (required)
-    -config string    Path to custom regex patterns config file
-    -json            Output results in JSON format
-    -output string   Write results to a file
-    -verbose         Enable verbose output
+### Command Line Flags
 
-### Example
+- `-f` : APK file to analyze (required)
+- `-o` : JSON output file (default: apkx-results.json)
+- `-r` : Regex patterns file (default: config/regexes.yaml)
 
-    apkx -apk example.apk -output results.txt
+## Example Output
 
-## Configuration
+```
+=== APK Analysis Summary ===
+Found sensitive information in 6 categories:
+  • API Keys: 2 findings
+  • OAuth Tokens: 1 findings
+  • Firebase URLs: 1 findings
+  • Email Addresses: 3 findings
+  • Endpoints: 12 findings
+  • URLs: 46 findings
 
-APKx uses YAML configuration files for regex patterns. Default patterns are included, but you can provide your own:
+Results saved to: /path/to/apkx-results.json
+```
 
-    patterns:
-      - name: "AWS Access Key"
-        regex: "AKIA[0-9A-Z]{16}"
-      - name: "Generic API Key"
-        regex: "[aA][pP][iI]_?[kK][eE][yY].{0,20}['|\"][0-9a-zA-Z]{32,45}['|\"]"
+## Custom Patterns
 
-## Output Example
+You can create your own patterns file in YAML format:
 
-    [URLs]
-    - resources/assets/target.json: https://target.com
-    - resources/assets/target.json: https://target.com/secret.db
-
+```yaml
+patterns:
+  - name: "API Keys"
+    regex: "api[_-]?key[_-]?([0-9a-zA-Z]{32,})"
+  - name: "OAuth Tokens"
+    regex: "access_token[_-]?([0-9a-zA-Z]{32,})"
+```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (git checkout -b feature/amazing-feature)
-3. Commit your changes (git commit -m 'Add some amazing feature')
-4. Push to the branch (git push origin feature/amazing-feature)
-5. Open a Pull Request
+Contributions are welcome! Please feel free to submit pull requests.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Inspired by [APKLeaks](https://github.com/dwisiswant0/apkleaks)
-- Uses [jadx](https://github.com/skylot/jadx) for APK decompilation
-
-## Disclaimer
-
-This tool is for security research purposes only. Make sure you have permission to analyze any APK file before using this tool.
+This project is licensed under the MIT License - see the LICENSE file for details.

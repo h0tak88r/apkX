@@ -17,11 +17,12 @@ import (
 )
 
 type Config struct {
-	APKFile      string
-	OutputFile   string
-	PatternsFile string
-	JadxArgs     string
-	JSON         bool
+	APKFile      string // Path to the APK file
+	OutputFile   string // Path to save results
+	PatternsFile string // Path to patterns file
+	JadxArgs     string // Additional jadx arguments
+	JSON         bool   // Save as JSON format
+	Verbose      bool   // Enable verbose output
 }
 
 type APKScanner struct {
@@ -56,10 +57,11 @@ func (s *APKScanner) Run() error {
 	if err := s.validateAPK(); err != nil {
 		return fmt.Errorf("APK validation failed: %v", err)
 	}
-	fmt.Printf("%s** Scanning APK: %s%s\n", utils.ColorBlue, s.apkPkg, utils.ColorEnd)
+	fmt.Printf("%s=== APK Analysis ===%s\n", utils.ColorGreen, utils.ColorEnd)
+	fmt.Printf("Scanning APK: %s\n", s.apkPkg)
 
 	// Create temporary directory
-	fmt.Printf("%s** Creating temporary directory...%s\n", utils.ColorBlue, utils.ColorEnd)
+	fmt.Println("Creating temporary directory...")
 	if err := s.decompileAPK(); err != nil {
 		return fmt.Errorf("failed to decompile APK: %v", err)
 	}
@@ -69,13 +71,13 @@ func (s *APKScanner) Run() error {
 	}
 
 	// Load patterns
-	fmt.Printf("%s** Loading patterns...%s\n", utils.ColorBlue, utils.ColorEnd)
+	fmt.Println("Loading patterns...")
 	if err := s.loadPatterns(); err != nil {
 		return fmt.Errorf("failed to load patterns: %v", err)
 	}
 
 	// Scan for matches
-	fmt.Printf("%s** Scanning for matches...%s\n", utils.ColorBlue, utils.ColorEnd)
+	fmt.Println("Scanning for matches...")
 	if err := s.scan(); err != nil {
 		return fmt.Errorf("failed to scan: %v", err)
 	}
@@ -196,21 +198,10 @@ func (s *APKScanner) scan() error {
 	}()
 
 	// Process results as they come in
-	matchFound := false
 	for result := range resultsChan {
-		matchFound = true
 		s.resultsMu.Lock()
 		s.results[result.name] = append(s.results[result.name], result.matches...)
 		s.resultsMu.Unlock()
-
-		fmt.Printf("\n%s[%s]%s\n", utils.ColorGreen, result.name, utils.ColorEnd)
-		for _, match := range result.matches {
-			fmt.Printf("- %s\n", match)
-		}
-	}
-
-	if !matchFound {
-		fmt.Printf("\n%s** Done with nothing. ¯\\_(ツ)_/¯%s\n", utils.ColorWarning, utils.ColorEnd)
 	}
 
 	return nil
@@ -314,9 +305,16 @@ func (s *APKScanner) decompileAPK() error {
 			return err
 		}
 
+		fmt.Printf("%s** Decompiling APK (this may take a while)...%s\n", utils.ColorBlue, utils.ColorEnd)
 		if err := jadx.Decompile(s.config.APKFile, tempDir, s.config.JadxArgs); err != nil {
-			os.RemoveAll(tempDir)
-			return err
+			// Check if we have any decompiled files before giving up
+			if _, statErr := os.Stat(filepath.Join(tempDir, "sources")); statErr == nil {
+				fmt.Printf("%s** Some decompilation errors occurred, but continuing with available files...%s\n", 
+					utils.ColorWarning, utils.ColorEnd)
+			} else {
+				os.RemoveAll(tempDir)
+				return fmt.Errorf("failed to decompile APK: %v", err)
+			}
 		}
 
 		// Move decompiled files to cache
@@ -338,52 +336,63 @@ func (s *APKScanner) decompileAPK() error {
 
 	jadx, err := decompiler.NewJadx()
 	if err != nil {
+		os.RemoveAll(tempDir)
 		return err
 	}
-	return jadx.Decompile(s.config.APKFile, s.tempDir, s.config.JadxArgs)
+
+	fmt.Printf("%s** Decompiling APK (this may take a while)...%s\n", utils.ColorBlue, utils.ColorEnd)
+	if err := jadx.Decompile(s.config.APKFile, tempDir, s.config.JadxArgs); err != nil {
+		// Check if we have any decompiled files before giving up
+		if _, statErr := os.Stat(filepath.Join(tempDir, "sources")); statErr == nil {
+			fmt.Printf("%s** Some decompilation errors occurred, but continuing with available files...%s\n", 
+				utils.ColorWarning, utils.ColorEnd)
+			return nil
+		}
+		os.RemoveAll(tempDir)
+		return fmt.Errorf("failed to decompile APK: %v", err)
+	}
+
+	return nil
 }
 
 func (s *APKScanner) saveResults() error {
-	if s.config.OutputFile == "" {
-		return nil
-	}
-
-	file, err := os.Create(s.config.OutputFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	if s.config.JSON {
-		output := struct {
-			Package string              `json:"package"`
-			Results map[string][]string `json:"results"`
-		}{
-			Package: s.apkPkg,
-			Results: s.results,
+	// Create statistics map for different finding types
+	stats := make(map[string]int)
+	
+	// Count findings by category
+	for category, matches := range s.results {
+		if len(matches) > 0 {
+			stats[category] = len(matches)
 		}
-		encoder := json.NewEncoder(file)
-		encoder.SetIndent("", "    ")
-		return encoder.Encode(output)
 	}
 
-	for name, matches := range s.results {
-		fmt.Fprintf(file, "[%s]\n", name)
-		for _, match := range matches {
-			fmt.Fprintf(file, "- %s\n", match)
+	// Print only the summary to terminal
+	fmt.Printf("\n%s=== APK Analysis Summary ===%s\n", utils.ColorGreen, utils.ColorEnd)
+	if len(stats) == 0 {
+		fmt.Printf("%sNo sensitive information found.%s\n", utils.ColorYellow, utils.ColorEnd)
+	} else {
+		fmt.Printf("%sFound sensitive information in %d categories:%s\n", 
+			utils.ColorBlue, len(stats), utils.ColorEnd)
+		
+		for category, count := range stats {
+			fmt.Printf("  • %s: %d findings\n", category, count)
 		}
-		fmt.Fprintln(file)
 	}
 
+	// Save detailed results to JSON file
 	if s.config.OutputFile != "" {
-		fmt.Printf("%s\n** Results saved into '%s%s%s%s'%s.\n",
-			utils.ColorHeader,
-			utils.ColorEnd,
-			utils.ColorGreen,
-			s.config.OutputFile,
-			utils.ColorHeader,
-			utils.ColorEnd)
+		jsonData, err := json.MarshalIndent(s.results, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal results to JSON: %v", err)
+		}
+
+		if err := os.WriteFile(s.config.OutputFile, jsonData, 0644); err != nil {
+			return fmt.Errorf("failed to write results to file: %v", err)
+		}
+		fmt.Printf("\n%sDetailed results saved to: %s%s%s\n", 
+			utils.ColorBlue, utils.ColorGreen, s.config.OutputFile, utils.ColorEnd)
 	}
+
 	return nil
 }
 

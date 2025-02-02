@@ -41,7 +41,17 @@ func NewJadx() (*Jadx, error) {
 }
 
 func (j *Jadx) Decompile(apkFile, outputDir string, args string) error {
-	cmdArgs := []string{apkFile, "-d", outputDir}
+	// Default arguments to improve decompilation success rate
+	cmdArgs := []string{
+		apkFile,
+		"-d", outputDir,
+		"--no-debug-info",
+		"--no-inline-methods",
+		"--no-replace-consts",
+		"--escape-unicode",
+		"--deobf",
+		"--show-bad-code",
+	}
 
 	if args != "" {
 		extraArgs := strings.Split(args, " ")
@@ -52,7 +62,17 @@ func (j *Jadx) Decompile(apkFile, outputDir string, args string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		// Check if output directory was created and contains decompiled files
+		if _, statErr := os.Stat(filepath.Join(outputDir, "sources")); statErr == nil {
+			// Even if there were some errors, if we have decompiled files, continue
+			return nil
+		}
+		return err
+	}
+
+	return nil
 }
 
 func DownloadJadx() error {
