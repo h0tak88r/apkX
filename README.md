@@ -8,6 +8,9 @@ Advanced mobile app analysis tool with intelligent caching, pattern matching, co
 ![Version](https://img.shields.io/badge/version-v3.3.0-orange.svg)
 [![Build and Release](https://github.com/h0tak88r/apkX/actions/workflows/build.yml/badge.svg)](https://github.com/h0tak88r/apkX/actions/workflows/build.yml)
 
+<img width="1262" height="730" alt="image" src="https://github.com/user-attachments/assets/5b5361a4-7c90-44ce-b09e-2fc30409b94d" />
+
+
 ## Features ✨
 
 ### 🔍 **Pattern-Based Analysis**
