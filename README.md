@@ -139,18 +139,21 @@ Notes:
 
 ### Option 1: Docker (Recommended) 🐳
 
-The easiest way to run apkX is using Docker:
+The easiest way to run apkX is using Docker. Works on fresh VPS/Ubuntu/Debian systems:
 
 ```bash
-# Clone the repository
-git clone https://github.com/h0tak88r/apkX.git
-cd apkX
-
-# Run the setup script
-./docker-setup.sh
+# One-liner installation (works on fresh VPS)
+git clone https://github.com/h0tak88r/apkX.git && cd apkX && chmod +x docker-setup.sh && ./docker-setup.sh
 ```
 
-That's it! The web interface will be available at `http://localhost:9090`
+**That's it!** The script will automatically:
+- ✅ Install Docker and Docker Compose if needed
+- ✅ Create necessary directories
+- ✅ Build the Docker image
+- ✅ Start the web server
+- ✅ Verify everything is working
+
+The web interface will be available at `http://localhost:9090`
 
 **What's included in Docker:**
 - ✅ All dependencies pre-installed (JADX, apkeep, ipatool, apk-mitm)
@@ -160,7 +163,8 @@ That's it! The web interface will be available at `http://localhost:9090`
 - ✅ Health monitoring and auto-restart
 - ✅ No manual setup required
 
-For detailed Docker instructions, see [DOCKER.md](DOCKER.md)
+**📖 Installation Guide**: See [INSTALL.md](INSTALL.md) for detailed instructions  
+**🐳 Docker Guide**: See [DOCKER.md](DOCKER.md) for advanced Docker usage
 
 ### Option 2: Manual Installation
 

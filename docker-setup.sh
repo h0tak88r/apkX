@@ -2,24 +2,59 @@
 
 # apkX Docker Setup Script
 # This script helps users set up and run apkX using Docker
+# Works on fresh VPS/Ubuntu/Debian systems
 
 set -e
 
 echo "🚀 apkX Docker Setup"
 echo "===================="
 
+# Function to install Docker
+install_docker() {
+    echo "📦 Installing Docker..."
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    rm get-docker.sh
+    
+    # Add user to docker group
+    sudo usermod -aG docker $USER
+    echo "✅ Docker installed successfully!"
+    echo "⚠️  You may need to log out and back in for group changes to take effect."
+    echo "   Or run: newgrp docker"
+}
+
+# Function to install Docker Compose
+install_docker_compose() {
+    echo "📦 Installing Docker Compose..."
+    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    echo "✅ Docker Compose installed successfully!"
+}
+
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
-    echo "❌ Docker is not installed. Please install Docker first:"
-    echo "   https://docs.docker.com/get-docker/"
-    exit 1
+    echo "❌ Docker is not installed."
+    read -p "Would you like to install Docker automatically? (y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        install_docker
+    else
+        echo "Please install Docker manually: https://docs.docker.com/get-docker/"
+        exit 1
+    fi
 fi
 
 # Check if Docker Compose is installed
 if ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose is not installed. Please install Docker Compose first:"
-    echo "   https://docs.docker.com/compose/install/"
-    exit 1
+    echo "❌ Docker Compose is not installed."
+    read -p "Would you like to install Docker Compose automatically? (y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        install_docker_compose
+    else
+        echo "Please install Docker Compose manually: https://docs.docker.com/compose/install/"
+        exit 1
+    fi
 fi
 
 # Create necessary directories
