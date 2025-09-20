@@ -1,13 +1,14 @@
 # apkX Web - Docker image (v3.3)
 # Builds the server and bundles all required tools
 
-FROM golang:1.22-bullseye as builder
+FROM golang:1.22-bookworm as builder
 
 # System deps for build and runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless \
     unzip zip curl git ca-certificates python3 python3-pip \
     wget build-essential \
+    libssl3 libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Optional tools: install apk-mitm (Node) and apkeep binary
@@ -64,7 +65,7 @@ COPY . .
 RUN go build -o apkx-web ./cmd/server/main.go
 
 # Final image
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 ENV PORT=9090
 
@@ -73,6 +74,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless \
     unzip zip curl ca-certificates python3 python3-pip \
     wget build-essential \
+    libssl3 libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js and apk-mitm
