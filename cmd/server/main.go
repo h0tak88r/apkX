@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/h0tak88r/apkX/internal/analyzer"
+	"github.com/h0tak88r/apkX/internal/downloader"
 )
 
 var (
@@ -65,6 +66,7 @@ var enableMITMPatch bool
 type JobStatus string
 
 const (
+	Version                  = "v3.2.0"
 	JobPending     JobStatus = "pending"
 	JobDownloading JobStatus = "downloading"
 	JobAnalyzing   JobStatus = "analyzing"
@@ -204,6 +206,7 @@ func (jm *JobManager) DeleteJob(jobID string) bool {
 }
 
 func main() {
+	log.Printf("apkX paths: uploadDir=%s, reportsRoot=%s, downloadDir=%s, patterns=%s", uploadDir, reportsRoot, downloadDir, patternsPathDefault)
 	must(os.MkdirAll(uploadDir, 0755))
 	must(os.MkdirAll(reportsRoot, 0755))
 	must(os.MkdirAll(downloadDir, 0755))
@@ -211,12 +214,14 @@ func main() {
 	http.HandleFunc("/", handleIndex)
 	http.HandleFunc("/upload", handleUploadAsync)
 	http.HandleFunc("/download", handleDownloadAsync)
+	http.HandleFunc("/download-ios", handleDownloadIOSAsync)
 	http.HandleFunc("/api/jobs", handleJobsAPI)
 	http.HandleFunc("/api/job/", handleJobAPI)
 	http.HandleFunc("/api/job/delete/", handleDeleteJob)
 	http.HandleFunc("/api/report/delete/", handleDeleteReport)
 	http.HandleFunc("/api/install/", handleInstallAPK)
 	http.HandleFunc("/api/manifest/", handleDownloadManifest)
+	http.HandleFunc("/api/plist/", handleDownloadPlist)
 
 	// Serve reports statically
 	fs := http.FileServer(http.Dir(reportsRoot))
@@ -244,7 +249,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>apkX Web</title>
+  <title>apkX Web v3.2.0</title>
   <style>
     :root {
       --bg-primary: #1a1a1a;
@@ -571,6 +576,36 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       color: white;
     }
     
+    .info-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    
+    .info-box h3 {
+      margin: 0 0 12px 0;
+      color: var(--text-primary);
+      font-size: 18px;
+    }
+    
+    .info-box p {
+      margin: 0 0 12px 0;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    
+    .info-box ul {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--text-secondary);
+    }
+    
+    .info-box li {
+      margin-bottom: 4px;
+    }
+    
     .google-play-section {
       background: var(--bg-tertiary);
       padding: 16px;
@@ -669,7 +704,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 </head>
 <body>
   <div class="header">
-    <h1>🔍 apkX Web Portal</h1>
+    <h1>🔍 apkX Web Portal v3.2.0</h1>
     <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
   </div>
   
@@ -681,6 +716,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       <div class="tab-navigation">
         <button class="tab-btn active" onclick="switchTab('upload')">📁 Upload File</button>
         <button class="tab-btn" onclick="switchTab('download')">⬇️ Download APK</button>
+        <button class="tab-btn" onclick="switchTab('download-ios')">🍎 Download iOS App</button>
       </div>
       
       <!-- Upload Tab -->
@@ -789,6 +825,54 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
           <button class="btn" type="submit">⬇️ Download & Analyze</button>
         </form>
       </div>
+      
+      <!-- iOS Download Tab -->
+      <div id="download-ios-tab" class="tab-content">
+        <div class="info-box">
+          <h3>🍎 Enhanced iOS Analysis</h3>
+          <p>Now with <strong>regex-based pattern matching</strong> and <strong>concurrent processing</strong> for faster, more accurate analysis!</p>
+          <ul>
+            <li>✅ 1652+ security patterns</li>
+            <li>✅ Mach-O binary analysis</li>
+            <li>✅ Plist parsing (XML & binary)</li>
+            <li>✅ Concurrent file processing</li>
+            <li>✅ Enhanced context extraction</li>
+          </ul>
+        </div>
+        <form action="/download-ios" method="post">
+          <div class="form-group">
+            <label for="bundle_id">Bundle ID</label>
+            <input type="text" name="bundle_id" id="bundle_id" placeholder="com.apple.mobilesafari" required>
+            <div class="small-text">Enter the iOS app bundle ID (e.g., com.apple.mobilesafari)</div>
+          </div>
+          
+          <div class="form-group">
+            <label for="ios_version">Version (Optional)</label>
+            <input type="text" name="ios_version" id="ios_version" placeholder="1.2.3">
+            <div class="small-text">Leave empty for latest version</div>
+          </div>
+          
+          <div class="checkbox-group">
+            <input type="checkbox" name="html" id="html_ios" checked>
+            <label for="html_ios">Generate HTML report</label>
+          </div>
+          
+          <div class="checkbox-group">
+            <input type="checkbox" name="send_discord" id="discordCheckboxIOS" onchange="toggleWebhookSectionIOS()">
+            <label for="discordCheckboxIOS">Send to Discord</label>
+          </div>
+          
+          <div class="webhook-section hidden" id="webhookSectionIOS">
+            <div class="form-group">
+              <label for="webhook_ios">Discord Webhook URL</label>
+              <input type="text" name="webhook" id="webhook_ios" placeholder="https://discord.com/api/webhooks/...">
+              <div class="small-text">Server default: {{.DefaultWebhookHint}}</div>
+            </div>
+          </div>
+          
+          <button class="btn" type="submit">🍎 Download & Analyze iOS App</button>
+        </form>
+      </div>
     </div>
     
     <div class="card">
@@ -825,8 +909,10 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
             <td>
               {{if or (eq .Type "APK") (eq .Type "XAPK")}}
               <a href="/api/install/{{.ID}}" class="btn-small" style="background: #28a745; color: white; text-decoration: none;">📱 Download</a>
-              {{end}}
               <a href="/api/manifest/{{.ID}}" class="btn-small" style="background: #17a2b8; color: white; text-decoration: none;">📄 Manifest</a>
+              {{else if eq .Type "IPA"}}
+              <a href="/api/plist/{{.ID}}" class="btn-small" style="background: #17a2b8; color: white; text-decoration: none;">📄 Plist</a>
+              {{end}}
               <button onclick="deleteReport('{{.ID}}')" class="btn-small btn-danger">🗑️ Delete</button>
             </td>
           </tr>
@@ -907,6 +993,20 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       const checkbox = document.getElementById('discordCheckboxDownload');
       const section = document.getElementById('webhookSectionDownload');
       const webhookInput = document.getElementById('webhook_download');
+      
+      if (checkbox.checked) {
+        section.classList.remove('hidden');
+        webhookInput.focus();
+      } else {
+        section.classList.add('hidden');
+        webhookInput.value = '';
+      }
+    }
+    
+    function toggleWebhookSectionIOS() {
+      const checkbox = document.getElementById('discordCheckboxIOS');
+      const section = document.getElementById('webhookSectionIOS');
+      const webhookInput = document.getElementById('webhook_ios');
       
       if (checkbox.checked) {
         section.classList.remove('hidden');
@@ -1046,6 +1146,17 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
         document.getElementById('discordCheckbox').checked = true;
         toggleWebhookSection();
       }
+      
+      // Check for upload success message
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('upload') === 'success') {
+        const jobId = urlParams.get('job_id');
+        alert('✅ File uploaded successfully! Job ID: ' + jobId + '\n\nYou can track the progress in the "Active Jobs" section below.');
+        
+        // Clean up URL by removing the parameters
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      }
     });
   </script>
 </body>
@@ -1076,6 +1187,116 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	if err := indexTmpl.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func handleDownloadIOSAsync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	bundleID := strings.TrimSpace(r.FormValue("bundle_id"))
+	if bundleID == "" {
+		http.Error(w, "bundle ID is required", http.StatusBadRequest)
+		return
+	}
+
+	version := strings.TrimSpace(r.FormValue("ios_version"))
+	source := "ipatool"
+
+	// Create job
+	job := jobManager.CreateJob(bundleID, version, source)
+
+	// Start background processing
+	go processIOSDownloadJob(job, r)
+
+	// Return job ID for tracking
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"job_id":  job.ID,
+		"status":  "started",
+		"message": "iOS download job started",
+	})
+}
+
+func processIOSDownloadJob(job *Job, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			jobManager.SetJobError(job.ID, fmt.Errorf("panic: %v", r))
+		}
+	}()
+
+	// Update status to downloading
+	jobManager.UpdateJobStatus(job.ID, JobDownloading, "Starting iOS app download...")
+
+	// Create iOS downloader
+	iosDownloader := downloader.NewIPAToolDownloader(downloadDir)
+
+	// Download the app
+	ipaPath, err := iosDownloader.DownloadApp(job.PackageName, job.Version)
+	if err != nil {
+		log.Printf("Job %s: iOS download failed: %v", job.ID, err)
+		jobManager.SetJobError(job.ID, fmt.Errorf("iOS download failed: %v", err))
+		return
+	}
+
+	log.Printf("Job %s: iOS app downloaded successfully: %s", job.ID, ipaPath)
+
+	// Update status to analyzing
+	jobManager.UpdateJobStatus(job.ID, JobAnalyzing, "Starting iOS analysis...")
+
+	// Create report directory
+	runID := time.Now().Format("20060102-150405")
+	outDir := filepath.Join(reportsRoot, runID)
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		jobManager.SetJobError(job.ID, fmt.Errorf("failed to create report directory: %v", err))
+		return
+	}
+
+	// Write meta
+	metaData := map[string]string{
+		"original_ipa": filepath.Base(ipaPath),
+		"bundle_id":    job.PackageName,
+		"version":      job.Version,
+		"source":       "ipatool",
+	}
+	metaJSON, _ := json.Marshal(metaData)
+	_ = os.WriteFile(filepath.Join(outDir, "apk.name"), metaJSON, 0644)
+
+	// Run iOS analyzer
+	generateHTML := r.FormValue("html") != ""
+	sendDiscord := r.FormValue("send_discord") != ""
+	webhookURL := strings.TrimSpace(r.FormValue("webhook"))
+
+	// Use form webhook if provided, otherwise use server default
+	if sendDiscord {
+		if webhookURL == "" {
+			webhookURL = serverDefaultWebhook
+		}
+	} else {
+		webhookURL = ""
+	}
+
+	cfg := analyzer.Config{
+		APKPath:      ipaPath,
+		OutputDir:    outDir,
+		PatternsPath: patternsPathDefault,
+		Workers:      3,
+		HTMLOutput:   generateHTML,
+		WebhookURL:   webhookURL,
+	}
+
+	iosAnalyzer := analyzer.NewIOSAnalyzer(&cfg)
+	if err := iosAnalyzer.AnalyzeIPA(ipaPath); err != nil {
+		log.Printf("Job %s: iOS analysis error: %v", job.ID, err)
+		jobManager.SetJobError(job.ID, fmt.Errorf("iOS analysis failed: %v", err))
+		return
+	}
+
+	// Job completed successfully
+	jobManager.SetJobReportID(job.ID, runID)
+	jobManager.UpdateJobStatus(job.ID, JobCompleted, "iOS analysis completed successfully")
+	log.Printf("Job %s: iOS analysis completed successfully", job.ID)
 }
 
 func handleDownloadAsync(w http.ResponseWriter, r *http.Request) {
@@ -1517,6 +1738,9 @@ func listReports() []reportRow {
 		if err := json.Unmarshal([]byte(metaContent), &metaData); err == nil {
 			// New JSON format
 			apkName := metaData["original_apk"]
+			if apkName == "" {
+				apkName = metaData["original_ipa"] // For iOS apps
+			}
 			st, _ := os.Stat(filepath.Join(reportsRoot, id))
 			fileType := "Unknown"
 			if strings.HasSuffix(strings.ToLower(apkName), ".apk") {
@@ -1601,24 +1825,31 @@ func handleUploadAsync(w http.ResponseWriter, r *http.Request) {
 	// Start background processing
 	go processUploadJob(job, savedPath, r)
 
-	// Return job ID for tracking
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"job_id":  job.ID,
-		"status":  "started",
-		"message": "Upload job started",
-	})
+	// Redirect back to main page with success message
+	http.Redirect(w, r, "/?upload=success&job_id="+job.ID, http.StatusSeeOther)
 }
 
-func processUploadJob(job *Job, apkPath string, r *http.Request) {
+func processUploadJob(job *Job, filePath string, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
 			jobManager.SetJobError(job.ID, fmt.Errorf("panic: %v", r))
 		}
 	}()
 
+	// Detect file type based on extension
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	// Handle iOS IPA files
+	if ext == ".ipa" {
+		processIOSUploadJob(job, filePath, r)
+		return
+	}
+
+	// Handle APK and XAPK files
+	apkPath := filePath
+
 	// If XAPK uploaded, convert to APK first
-	if strings.HasSuffix(strings.ToLower(apkPath), ".xapk") {
+	if ext == ".xapk" {
 		jobManager.UpdateJobStatus(job.ID, JobAnalyzing, "Converting XAPK to APK...")
 		apkConverted, err := convertXAPKToAPK(apkPath)
 		if err != nil {
@@ -1629,7 +1860,7 @@ func processUploadJob(job *Job, apkPath string, r *http.Request) {
 	}
 
 	// Update status to analyzing
-	jobManager.UpdateJobStatus(job.ID, JobAnalyzing, "Starting analysis...")
+	jobManager.UpdateJobStatus(job.ID, JobAnalyzing, "Starting APK analysis...")
 
 	// Create report directory
 	runID := time.Now().Format("20060102-150405")
@@ -1708,16 +1939,92 @@ func processUploadJob(job *Job, apkPath string, r *http.Request) {
 	log.Printf("Job %s: Analysis completed successfully", job.ID)
 }
 
+// processIOSUploadJob handles uploaded iOS IPA files
+func processIOSUploadJob(job *Job, ipaPath string, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			jobManager.SetJobError(job.ID, fmt.Errorf("panic: %v", r))
+		}
+	}()
+
+	// Update status to analyzing
+	jobManager.UpdateJobStatus(job.ID, JobAnalyzing, "Starting iOS analysis...")
+
+	// Create report directory
+	runID := time.Now().Format("20060102-150405")
+	outDir := filepath.Join(reportsRoot, runID)
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		jobManager.SetJobError(job.ID, fmt.Errorf("failed to create report directory: %v", err))
+		return
+	}
+
+	// Write meta for iOS
+	metaData := map[string]string{
+		"original_ipa": filepath.Base(ipaPath),
+		"source":       "upload",
+	}
+	metaJSON, _ := json.Marshal(metaData)
+	_ = os.WriteFile(filepath.Join(outDir, "apk.name"), metaJSON, 0644)
+
+	// Run iOS analyzer
+	generateHTML := r.FormValue("html") != ""
+	sendDiscord := r.FormValue("send_discord") != ""
+	webhookURL := strings.TrimSpace(r.FormValue("webhook"))
+
+	// Use form webhook if provided, otherwise use server default
+	if sendDiscord {
+		if webhookURL == "" {
+			webhookURL = serverDefaultWebhook
+		}
+	} else {
+		webhookURL = ""
+	}
+
+	cfg := analyzer.Config{
+		APKPath:      ipaPath,
+		OutputDir:    outDir,
+		PatternsPath: patternsPathDefault,
+		Workers:      3,
+		HTMLOutput:   generateHTML,
+		WebhookURL:   webhookURL,
+	}
+
+	iosAnalyzer := analyzer.NewIOSAnalyzer(&cfg)
+	if err := iosAnalyzer.AnalyzeIPA(ipaPath); err != nil {
+		log.Printf("Job %s: iOS analysis error: %v", job.ID, err)
+		jobManager.SetJobError(job.ID, fmt.Errorf("iOS analysis failed: %v", err))
+		return
+	}
+
+	// Job completed successfully
+	jobManager.SetJobReportID(job.ID, runID)
+	jobManager.UpdateJobStatus(job.ID, JobCompleted, "iOS analysis completed successfully")
+	log.Printf("Job %s: iOS analysis completed successfully", job.ID)
+}
+
 func saveUploadedFile(file multipart.File, header *multipart.FileHeader) (string, error) {
+	// Check file size before saving
+	if header.Size == 0 {
+		return "", fmt.Errorf("uploaded file is empty (0 bytes). Please check the file and try again")
+	}
+
 	dst := filepath.Join(uploadDir, safeName(header.Filename))
 	out, err := os.Create(dst)
 	if err != nil {
 		return "", err
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, file); err != nil {
+
+	bytesWritten, err := io.Copy(out, file)
+	if err != nil {
 		return "", err
 	}
+
+	// Double-check the saved file size
+	if bytesWritten == 0 {
+		return "", fmt.Errorf("saved file is empty (0 bytes). The uploaded file may be corrupted")
+	}
+
 	return dst, nil
 }
 
@@ -2101,6 +2408,214 @@ func handleDownloadManifest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("AndroidManifest.xml %s downloaded successfully", reportID)
+}
+
+func handleDownloadPlist(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	reportID := strings.TrimPrefix(r.URL.Path, "/api/plist/")
+	if reportID == "" {
+		http.Error(w, "report ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Find the Info.plist file for this iOS report
+	reportDir := filepath.Join(reportsRoot, reportID)
+
+	// Look for Info.plist in common iOS extraction locations
+	plistPaths := []string{
+		filepath.Join(reportDir, "Info.plist"),
+		filepath.Join(reportDir, "Payload", "Info.plist"),
+		filepath.Join(reportDir, "Payload", "*.app", "Info.plist"),
+	}
+
+	var plistPath string
+	for _, path := range plistPaths {
+		if strings.Contains(path, "*") {
+			// Handle glob pattern for .app directory
+			matches, err := filepath.Glob(path)
+			if err == nil && len(matches) > 0 {
+				plistPath = matches[0]
+				break
+			}
+		} else {
+			if _, err := os.Stat(path); err == nil {
+				plistPath = path
+				break
+			}
+		}
+	}
+
+	// If not found in common locations, search for any Info.plist file
+	if plistPath == "" {
+		err := filepath.Walk(reportDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !info.IsDir() && strings.HasSuffix(path, "Info.plist") {
+				plistPath = path
+				return filepath.SkipDir // Stop searching once found
+			}
+			return nil
+		})
+		if err != nil {
+			http.Error(w, "failed to search for Info.plist", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if plistPath == "" {
+		http.Error(w, "Info.plist not found", http.StatusNotFound)
+		return
+	}
+
+	// Read the plist file
+	plistContent, err := os.ReadFile(plistPath)
+	if err != nil {
+		http.Error(w, "failed to read file", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert binary plist to XML if needed
+	xmlContent := convertPlistToXML(plistContent)
+
+	// Set headers for file download
+	w.Header().Set("Content-Disposition", "attachment; filename=Info.plist")
+	w.Header().Set("Content-Type", "application/xml")
+
+	// Serve the converted content
+	_, err = w.Write(xmlContent)
+	if err != nil {
+		log.Printf("Failed to serve Info.plist %s: %v", plistPath, err)
+		return
+	}
+
+	log.Printf("Info.plist %s downloaded successfully", reportID)
+}
+
+// convertPlistToXML converts binary plist to XML format
+func convertPlistToXML(plistContent []byte) []byte {
+	// Check if it's already XML
+	if len(plistContent) > 5 && string(plistContent[:5]) == "<?xml" {
+		return plistContent
+	}
+
+	// Check if it's a binary plist
+	if len(plistContent) > 8 && string(plistContent[:8]) == "bplist00" {
+		// Try to convert using plutil command (macOS/Linux)
+		cmd := exec.Command("plutil", "-convert", "xml1", "-o", "-", "-")
+		cmd.Stdin = strings.NewReader(string(plistContent))
+		output, err := cmd.Output()
+		if err == nil {
+			return output
+		}
+
+		// Fallback: Create a basic XML structure from binary plist
+		return createBasicXMLFromBinaryPlist(plistContent)
+	}
+
+	// If not binary plist, return original content
+	return plistContent
+}
+
+// createBasicXMLFromBinaryPlist creates a basic XML structure from binary plist
+func createBasicXMLFromBinaryPlist(plistContent []byte) []byte {
+	var result strings.Builder
+	result.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+	result.WriteString("<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n")
+	result.WriteString("<plist version=\"1.0\">\n<dict>\n")
+
+	// Extract key-value pairs from binary plist
+	keyValuePairs := extractKeyValuePairsFromBinaryPlist(plistContent)
+
+	for key, value := range keyValuePairs {
+		result.WriteString(fmt.Sprintf("  <key>%s</key>\n", key))
+		result.WriteString(fmt.Sprintf("  <string>%s</string>\n", value))
+	}
+
+	result.WriteString("</dict>\n</plist>\n")
+	return []byte(result.String())
+}
+
+// extractKeyValuePairsFromBinaryPlist extracts key-value pairs from binary plist
+func extractKeyValuePairsFromBinaryPlist(plistContent []byte) map[string]string {
+	pairs := make(map[string]string)
+
+	// Simple extraction of readable strings
+	content := string(plistContent)
+
+	// Common iOS plist keys and their likely values
+	commonKeys := []string{
+		"CFBundleIdentifier", "CFBundleName", "CFBundleVersion", "CFBundleShortVersionString",
+		"CFBundleExecutable", "CFBundlePackageType", "CFBundleSupportedPlatforms",
+		"LSRequiresIPhoneOS", "MinimumOSVersion", "NSAppTransportSecurity",
+		"NSCameraUsageDescription", "UIDeviceFamily", "UIMainStoryboardFile",
+		"UIRequiredDeviceCapabilities", "UISupportedInterfaceOrientations",
+		"CFBundleURLTypes", "CFBundleURLSchemes", "CFBundleURLName",
+		"NSAllowsArbitraryLoads", "CFBundleIcons", "CFBundleIconFiles",
+		"UILaunchImages", "UILaunchImageName", "UILaunchImageOrientation",
+		"UILaunchImageSize", "UIInterfaceOrientationPortrait",
+		"UIInterfaceOrientationPortraitUpsideDown", "UIInterfaceOrientationLandscapeLeft",
+		"UIInterfaceOrientationLandscapeRight", "CFBundlePrimaryIcon",
+		"CFBundleIconName", "CFBundleDevelopmentRegion", "CFBundleInfoDictionaryVersion",
+		"DTPlatformBuild", "DTPlatformName", "DTPlatformVersion", "DTSDKBuild",
+		"DTSDKName", "DTXcode", "DTXcodeBuild", "BuildMachineOSBuild",
+		"CFBundleSignature", "CFBundleExecutable", "CFBundlePackageType",
+		"CFBundleSupportedPlatforms", "CFBundleURLTypes", "CFBundleURLSchemes",
+		"CFBundleURLName", "CFBundleURLTypes", "CFBundleURLSchemes",
+		"CFBundleURLName", "CFBundleURLTypes", "CFBundleURLSchemes",
+	}
+
+	// Extract values for each key
+	for _, key := range commonKeys {
+		if strings.Contains(content, key) {
+			// Try to find a value after the key
+			keyIndex := strings.Index(content, key)
+			if keyIndex != -1 {
+				// Look for a value in the next 200 characters
+				searchArea := content[keyIndex:min(keyIndex+200, len(content))]
+
+				// Extract potential values (simplified)
+				if strings.Contains(searchArea, "com.") {
+					// Look for bundle identifier
+					start := strings.Index(searchArea, "com.")
+					if start != -1 {
+						end := start
+						for end < len(searchArea) && end < start+100 {
+							if searchArea[end] < 32 || searchArea[end] > 126 {
+								break
+							}
+							end++
+						}
+						if end > start {
+							value := searchArea[start:end]
+							if len(value) > 3 {
+								pairs[key] = value
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// If no pairs found, add a note
+	if len(pairs) == 0 {
+		pairs["Note"] = "Binary plist detected - use a proper plist viewer to see full content"
+		pairs["Format"] = "Binary Property List (bplist00)"
+	}
+
+	return pairs
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func getEnv(key, def string) string {

@@ -4,26 +4,34 @@ services:
   apkx-web:
     build:
       context: .
-    image: apkx-web:compose
+    image: apkx-web:latest
     container_name: apkx-web
     ports:
       - "9090:9090"
     environment:
-      # Prefer smart root detection; pin explicitly if mounting project root
+      # Set the project root
       - APKX_ROOT=/app
-      # Optionally set a default Discord webhook
-      # - DISCORD_WEBHOOK=
-      # Or override individual paths if not mounting the whole root
-      # - APKX_UPLOAD_DIR=/web-data/uploads
-      # - APKX_REPORTS_DIR=/web-data/reports
-      # - APKX_DOWNLOAD_DIR=/web-data/downloads
-      # - APKX_PATTERNS_PATH=/config/regexes.yaml
+      # Set individual paths
+      - APKX_UPLOAD_DIR=/app/web-data/uploads
+      - APKX_REPORTS_DIR=/app/web-data/reports
+      - APKX_DOWNLOAD_DIR=/app/web-data/downloads
+      - APKX_PATTERNS_PATH=/app/config/regexes.yaml
+      # Optional: Set a default Discord webhook
+      # - DISCORD_WEBHOOK=your_webhook_url_here
     volumes:
-      # Mount the project root for smart detection
-      - ./:/app
-      # If you prefer mounting only needed dirs, comment the line above and use:
-      # - ./web-data:/web-data
-      # - ./config:/config
-    command: ["/usr/local/bin/apkx-web", "-addr", ":9090", "-mitm"]
+      # Mount the entire project directory for source code and config
+      - .:/app
+      # Mount specific data directories for persistence
+      - ./web-data/uploads:/app/web-data/uploads
+      - ./web-data/reports:/app/web-data/reports
+      - ./web-data/downloads:/app/web-data/downloads
+    command: ["/usr/local/bin/apkx-web", "-addr", ":9090"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
 

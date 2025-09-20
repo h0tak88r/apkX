@@ -246,6 +246,49 @@ const htmlTemplate = `
             box-shadow: var(--shadow);
         }
         
+        .sidebar-close {
+            display: none;
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: var(--danger);
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            z-index: 1001;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .sidebar-close:hover {
+            background: #e74c3c;
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            background: var(--accent-primary);
+            color: var(--bg-primary);
+            border: none;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            z-index: 1002;
+            box-shadow: var(--shadow);
+        }
+        
+        .sidebar-toggle:hover {
+            background: var(--accent-secondary);
+        }
+        
         .sidebar.collapsed {
             transform: translateX(-100%);
         }
@@ -321,6 +364,264 @@ const htmlTemplate = `
         
         .nav-item .count.success {
             background: var(--success);
+        }
+        
+        .nav-badge {
+            float: right;
+            background: var(--accent-primary);
+            color: var(--bg-primary);
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            min-width: 20px;
+            text-align: center;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .nav-badge.danger { background: var(--danger); }
+        .nav-badge.warning { background: var(--warning); }
+        .nav-badge.success { background: var(--success); }
+        
+        .header-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .info-item {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-primary);
+        }
+        
+        .info-item h3 {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+        
+        .info-item p {
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .stat-card.danger { border-left: 4px solid var(--danger); }
+        .stat-card.warning { border-left: 4px solid var(--warning); }
+        .stat-card.success { border-left: 4px solid var(--success); }
+        .stat-card.info { border-left: 4px solid var(--accent-primary); }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-number.danger { color: var(--danger); }
+        .stat-number.warning { color: var(--warning); }
+        .stat-number.success { color: var(--success); }
+        .stat-number.info { color: var(--accent-primary); }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .section {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        
+        .section-header {
+            background: var(--bg-tertiary);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .section-header h2 {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+        }
+        
+        .section-content {
+            padding: 2rem;
+        }
+        
+        .vulnerability {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--warning);
+            transition: all 0.2s ease;
+        }
+        
+        .vulnerability:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .vulnerability.high { border-left-color: var(--danger); }
+        .vulnerability.medium { border-left-color: var(--warning); }
+        .vulnerability.low { border-left-color: var(--success); }
+        
+        .vuln-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .vuln-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .vuln-severity {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .vuln-severity.high {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .vuln-severity.medium {
+            background: var(--warning);
+            color: var(--bg-primary);
+        }
+        
+        .vuln-severity.low {
+            background: var(--success);
+            color: var(--bg-primary);
+        }
+        
+        .vuln-description {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+        
+        .vuln-context {
+            background: var(--bg-primary);
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            word-break: break-all;
+            overflow-x: auto;
+        }
+        
+        .pattern-category {
+            margin-bottom: 2rem;
+        }
+        
+        .pattern-category h3 {
+            color: var(--accent-primary);
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+        
+        .pattern-item {
+            background: var(--bg-tertiary);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-primary);
+            transition: all 0.2s ease;
+        }
+        
+        .pattern-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        
+        .pattern-header {
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .pattern-header strong {
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        
+        .pattern-context {
+            margin-top: 1rem;
+        }
+        
+        .pattern-context pre {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 0;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: var(--text-muted);
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .pattern-context code {
+            background: none;
+            padding: 0;
+            color: inherit;
+            font-size: inherit;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
         }
         
         /* Controls */
@@ -909,8 +1210,56 @@ const htmlTemplate = `
                 transform: translateX(0);
             }
             
+            .sidebar-close {
+                display: flex;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+            }
+            
             .main-content {
                 margin-left: 0;
+                padding-top: 4rem;
+            }
+            
+            .nav-badge {
+                font-size: 0.6rem;
+                padding: 0.1rem 0.3rem;
+                min-width: 16px;
+            }
+            
+            .pattern-context pre {
+                font-size: 0.75rem;
+                padding: 0.75rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .nav-badge {
+                font-size: 0.5rem;
+                padding: 0.1rem 0.2rem;
+                min-width: 14px;
+            }
+            
+            .nav-item {
+                padding: 0.75rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+        
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .sidebar {
+                width: 280px;
+            }
+            
+            .main-content {
+                margin-left: 280px;
+            }
+            
+            .nav-badge {
+                font-size: 0.65rem;
+                padding: 0.15rem 0.4rem;
             }
         }
         
@@ -947,246 +1296,170 @@ const htmlTemplate = `
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
+        <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
+        <button class="sidebar-close" id="sidebarClose" onclick="toggleSidebar()">×</button>
         <div class="sidebar-header">
-            <h2>🔍 APK Security Report</h2>
-            <div class="subtitle">{{.APKName}}</div>
+            <h1>📱 APK Analysis</h1>
+            <p>Security Report</p>
         </div>
         
-        <div class="sidebar-content">
-            <!-- Navigation -->
+        <nav class="sidebar-nav">
             <div class="nav-section">
-                <h3>📊 Overview</h3>
-                <a href="#" class="nav-item active" data-section="summary">
-                    Summary <span class="count">{{.TotalFindings}}</span>
+                <h3>Overview</h3>
+                <a href="#summary" class="nav-item active">
+                    📊 Summary
+                    <span class="nav-badge info">{{.TotalFindings}}</span>
                 </a>
-                <a href="#" class="nav-item" data-section="vulnerabilities">
-                    Vulnerabilities <span class="count">{{.Summary.Vulnerabilities}}</span>
+                <a href="#vulnerabilities" class="nav-item">
+                    🛡️ Vulnerabilities
+                    <span class="nav-badge danger">{{.Summary.Vulnerabilities}}</span>
+                </a>
+                <a href="#patterns" class="nav-item">
+                    🔍 Pattern Matches
+                    <span class="nav-badge info">{{.TotalFindings}}</span>
                 </a>
             </div>
             
             <div class="nav-section">
-                <h3>🔍 Categories</h3>
+                <h3>Categories</h3>
                 {{range .Categories}}
                 {{if gt .Count 0}}
-                <a href="#" class="nav-item" data-section="{{.Name}}">
-                    {{.Name}} <span class="count">{{.Count}}</span>
+                <a href="#{{.Name}}" class="nav-item">
+                    {{.Name}}
+                    <span class="nav-badge info">{{.Count}}</span>
                 </a>
                 {{end}}
                 {{end}}
             </div>
-            
-            <!-- Controls -->
-            <div class="controls">
-                <div class="control-group">
-                    <label>View Mode</label>
-                    <button class="toggle-btn active" id="toggle-compact">Compact View</button>
-                    <button class="toggle-btn" id="toggle-detailed">Detailed View</button>
-                </div>
-                
-                <div class="control-group">
-                    <label>Show Context</label>
-                    <button class="toggle-btn active" id="toggle-context" disabled>Context Always Shown</button>
-                </div>
-                
-                <div class="control-group">
-                    <label>Items per page</label>
-                    <select id="perPageSelect">
-                        <option value="10">10</option>
-                        <option value="25" selected>25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                </div>
-            </div>
-        </div>
+        </nav>
     </div>
     
     <!-- Main Content -->
     <div class="main-content" id="mainContent">
-        <!-- Top Bar -->
-        <div class="top-bar">
-            <button class="menu-toggle" id="menuToggle">☰ Menu</button>
-            <div class="view-controls">
-                <button class="view-toggle active" id="viewAll">All</button>
-                <button class="view-toggle" id="viewHigh">High Risk</button>
-                <button class="view-toggle" id="viewMedium">Medium Risk</button>
-                <button class="view-toggle" id="viewLow">Low Risk</button>
-                <button class="export-btn" id="exportBtn">📥 Export</button>
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">☰ Menu</button>
+        <div class="header">
+            <h1>APK Security Analysis Report</h1>
+            <div class="header-info">
+                <div class="info-item">
+                    <h3>APK Name</h3>
+                    <p>{{.APKName}}</p>
+                </div>
+                {{if .PackageName}}
+                <div class="info-item">
+                    <h3>Package</h3>
+                    <p>{{.PackageName}}</p>
+                </div>
+                {{end}}
+                {{if .Version}}
+                <div class="info-item">
+                    <h3>Version</h3>
+                    <p>{{.Version}}</p>
+                </div>
+                {{end}}
+                {{if .MinSdkVersion}}
+                <div class="info-item">
+                    <h3>Min SDK</h3>
+                    <p>{{.MinSdkVersion}}</p>
+                </div>
+                {{end}}
+                <div class="info-item">
+                    <h3>Analysis Time</h3>
+                    <p>{{.ScanTime}}</p>
+                </div>
             </div>
         </div>
         
-        <div class="container">
-            <div class="header">
-                <h1>🔍 APK Security Analysis Report</h1>
-                <div class="subtitle">
-                    <strong>APK:</strong> {{.APKName}}<br>
-                    {{if .PackageName}}<strong>Package:</strong> {{.PackageName}}<br>{{end}}
-                    {{if .Version}}<strong>Version:</strong> {{.Version}}<br>{{end}}
-                    {{if .MinSdkVersion}}<strong>Min SDK:</strong> {{.MinSdkVersion}}<br>{{end}}
-                    <strong>Scan Time:</strong> {{.ScanTime}}<br>
-                    <strong>Total Findings:</strong> {{.TotalFindings}}
-                </div>
+        <div id="summary" class="stats-grid">
+            <div class="stat-card danger">
+                <div class="stat-number danger">{{.Summary.HighRisk}}</div>
+                <div class="stat-label">High Risk</div>
             </div>
-        
-            <!-- Summary Section -->
-            <div class="content-section active" id="summary-section">
-                <div class="section-header">
-                    <h2 class="section-title">📊 Analysis Summary</h2>
-                </div>
-                
-                <div class="summary-cards">
-                    <div class="card">
-                        <div class="card-icon">📁</div>
-                        <div class="card-content">
-                            <h3>Files Analyzed</h3>
-                            <div class="number">{{.Summary.TotalFiles}}</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon">🔍</div>
-                        <div class="card-content">
-                            <h3>Patterns Scanned</h3>
-                            <div class="number">{{.Summary.TotalPatterns}}</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon">⚠️</div>
-                        <div class="card-content">
-                            <h3>Vulnerabilities</h3>
-                            <div class="number">{{.Summary.Vulnerabilities}}</div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-icon">🔴</div>
-                        <div class="card-content">
-                            <h3>High Risk</h3>
-                            <div class="number" style="color: var(--danger);">{{.Summary.HighRisk}}</div>
-                        </div>
-                    </div>
-                </div>
+            <div class="stat-card warning">
+                <div class="stat-number warning">{{.Summary.Vulnerabilities}}</div>
+                <div class="stat-label">Vulnerabilities</div>
             </div>
+            <div class="stat-card success">
+                <div class="stat-number success">{{.Summary.TotalFiles}}</div>
+                <div class="stat-label">Files Analyzed</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-number info">{{.TotalFindings}}</div>
+                <div class="stat-label">Total Findings</div>
+            </div>
+        </div>
             
-            <!-- Vulnerabilities Section -->
-            {{if .Vulnerabilities}}
-            <div class="content-section" id="vulnerabilities-section">
-                <div class="section-header">
-                    <h2 class="section-title">🚨 Security Vulnerabilities</h2>
-                    <div class="section-stats">
-                        <div class="stat-item">
-                            <div class="stat-number">{{len .Vulnerabilities}}</div>
-                            <div class="stat-label">Total</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="filter-bar">
-                    <div class="search-box">
-                        <input type="text" id="vulnSearch" placeholder="Search vulnerabilities...">
-                    </div>
-                    <div class="filter-group">
-                        <label>Severity:</label>
-                        <select id="severityFilter">
-                            <option value="all">All</option>
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="vulnerabilities">
+        <div id="vulnerabilities" class="section">
+            <div class="section-header">
+                <h2>🛡️ Security Vulnerabilities</h2>
+            </div>
+            <div class="section-content">
+                {{if .Vulnerabilities}}
                     {{range .Vulnerabilities}}
-                    <div class="vulnerability">
-                        <div class="vulnerability-header">
-                            <span class="severity-badge severity-{{.Severity}}">{{.Severity}}</span>
-                            <h3>{{.Type}}</h3>
+                    <div class="vulnerability {{.Severity}}">
+                        <div class="vuln-header">
+                            <div class="vuln-title">{{.Type}}</div>
+                            <div class="vuln-severity {{.Severity}}">{{.Severity}}</div>
                         </div>
-                        <div class="vulnerability-section">
-                            <h4>Description</h4>
-                            <p>{{.Description}}</p>
-                        </div>
+                        <div class="vuln-description">{{.Description}}</div>
                         {{if .Details}}
-                        <div class="vulnerability-section">
-                            <h4>Details</h4>
-                            <pre style="background: var(--bg-primary); padding: 16px; border-radius: 8px; overflow-x: auto; color: var(--text-secondary);">{{.Details}}</pre>
+                        <div class="vuln-context">{{.Details}}</div>
+                        {{end}}
+                    </div>
+                    {{end}}
+                {{else}}
+                <div class="empty-state">
+                    <h3>✅ No Vulnerabilities Found</h3>
+                    <p>No security vulnerabilities were detected in this APK.</p>
+                </div>
+                {{end}}
+            </div>
+        </div>
+            
+        <div id="patterns" class="section">
+            <div class="section-header">
+                <h2>🔍 Pattern Matches</h2>
+            </div>
+            <div class="section-content">
+                {{if .Categories}}
+                    {{$hasFindings := false}}
+                    {{range $category, $data := .Categories}}
+                    {{if gt $data.Count 0}}
+                    {{$hasFindings = true}}
+                    <div class="pattern-category" id="{{$data.Name}}">
+                        <h3>{{$data.Name}}</h3>
+                        {{range $index, $finding := $data.Findings}}
+                        <div class="pattern-item">
+                            <div class="pattern-header">
+                                <strong>File: {{.File | stripAnsi}}</strong>
+                            </div>
+                            <div class="pattern-context">
+                                <pre><code>{{.Match | stripAnsi}}</code></pre>
+                                {{if .Context}}
+                                <div class="pattern-context">
+                                    <pre><code>{{.Context | stripAnsi | formatText}}</code></pre>
+                                </div>
+                                {{end}}
+                            </div>
                         </div>
                         {{end}}
                     </div>
                     {{end}}
+                    {{end}}
+                    {{if not $hasFindings}}
+                    <div class="empty-state">
+                        <h3>✅ No Pattern Matches Found</h3>
+                        <p>No sensitive information patterns were detected in this APK.</p>
+                    </div>
+                    {{end}}
+                {{else}}
+                <div class="empty-state">
+                    <h3>✅ No Pattern Matches Found</h3>
+                    <p>No sensitive information patterns were detected in this APK.</p>
                 </div>
+                {{end}}
             </div>
-            {{end}}
-            
-            <!-- Categories Sections -->
-            {{if .Categories}}
-            {{$hasFindings := false}}
-            {{range $category, $data := .Categories}}
-            {{if gt $data.Count 0}}
-            {{$hasFindings = true}}
-            <div class="content-section" id="{{$category}}-section">
-                <div class="section-header">
-                    <h2 class="section-title">🔍 {{$data.Name}}</h2>
-                    <div class="section-stats">
-                        <div class="stat-item">
-                            <div class="stat-number">{{$data.Count}}</div>
-                            <div class="stat-label">Findings</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="filter-bar">
-                    <div class="search-box">
-                        <input type="text" id="{{$category}}Search" placeholder="Search in {{$data.Name}}...">
-                    </div>
-                    <div class="filter-group">
-                        <label>Show:</label>
-                        <select id="{{$category}}Filter">
-                            <option value="all">All</option>
-                            <option value="with-context">With Context</option>
-                            <option value="without-context">Without Context</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="category" data-category="{{$category}}">
-                    <div class="findings-container" data-category="{{$category}}">
-                        {{range $index, $finding := $data.Findings}}
-                        <div class="finding" data-index="{{$index}}">
-                            <div class="finding-file">{{$data.Name}}: {{.File | stripAnsi}}</div>
-                            <div class="finding-match">{{.Match | stripAnsi}}</div>
-                            {{if .Context}}
-                            <div class="finding-context">
-                                <strong>Context:</strong>
-                                <div class="context-full" id="context-{{$category}}-{{$index}}">{{.Context | stripAnsi | formatText}}</div>
-                            </div>
-                            {{end}}
-                        </div>
-                        {{end}}
-                    </div>
-                    
-                    <div class="pagination" id="pagination-{{$category}}">
-                        <button onclick="previousPage('{{$category}}')" id="prev-{{$category}}">Previous</button>
-                        <span id="page-info-{{$category}}">Page 1 of 1</span>
-                        <button onclick="nextPage('{{$category}}')" id="next-{{$category}}">Next</button>
-                    </div>
-                </div>
-            </div>
-            {{end}}
-            {{end}}
-            {{if not $hasFindings}}
-            <div class="no-findings">
-                <h2>✅ No Security Issues Found</h2>
-                <p>Great! No sensitive information or vulnerabilities were detected in this APK.</p>
-            </div>
-            {{end}}
-            {{else}}
-            <div class="no-findings">
-                <h2>✅ No Security Issues Found</h2>
-                <p>Great! No sensitive information or vulnerabilities were detected in this APK.</p>
-            </div>
-            {{end}}
+        </div>
             
             <div class="footer">
                 <p>Generated by apkX Security Scanner on {{.ScanTime}}</p>
@@ -1196,254 +1469,94 @@ const htmlTemplate = `
     </div>
     
     <script>
-        // Global state
-        let currentSection = 'summary';
-        let currentView = 'compact';
-        let showContext = true;
-        let currentPerPage = 25;
-        let currentRiskFilter = 'all';
-        
-        // Initialize the application
+        // Enhanced navigation with better error handling
         document.addEventListener('DOMContentLoaded', function() {
-            initializeSidebar();
-            initializeViewControls();
-            initializeFilters();
-            showSection('summary');
-        });
-        
-        // Sidebar functionality
-        function initializeSidebar() {
-            const menuToggle = document.getElementById('menuToggle');
-            const sidebar = document.getElementById('sidebar');
-            const mainContent = document.getElementById('mainContent');
-            
-            menuToggle.addEventListener('click', function() {
-                sidebar.classList.toggle('collapsed');
-                mainContent.classList.toggle('expanded');
-            });
-            
-            // Navigation items
+            // Initialize navigation
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.addEventListener('click', function(e) {
                     e.preventDefault();
-                    const section = this.dataset.section;
-                    showSection(section);
                     
-                    // Update active state
+                    // Remove active class from all items
                     document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                    
+                    // Add active class to clicked item
                     this.classList.add('active');
-                });
-            });
-        }
-        
-        // Show specific section
-        function showSection(sectionName) {
-            // Hide all sections
-            document.querySelectorAll('.content-section').forEach(section => {
-                section.classList.remove('active');
-            });
-            
-            // Show target section
-            const targetSection = document.getElementById(sectionName + '-section');
-            if (targetSection) {
-                targetSection.classList.add('active');
-                currentSection = sectionName;
-            }
-        }
-        
-        // View controls
-        function initializeViewControls() {
-            // View mode toggles
-            document.getElementById('toggle-compact').addEventListener('click', function() {
-                setViewMode('compact');
-            });
-            
-            document.getElementById('toggle-detailed').addEventListener('click', function() {
-                setViewMode('detailed');
-            });
-            
-            // Context is always shown; disable the toggle button
-            const contextBtn = document.getElementById('toggle-context');
-            if (contextBtn) {
-                contextBtn.disabled = true;
-                contextBtn.textContent = 'Context Always Shown';
-            }
-            
-            // Risk filter buttons
-            document.getElementById('viewAll').addEventListener('click', function() {
-                setRiskFilter('all');
-            });
-            
-            document.getElementById('viewHigh').addEventListener('click', function() {
-                setRiskFilter('high');
-            });
-            
-            document.getElementById('viewMedium').addEventListener('click', function() {
-                setRiskFilter('medium');
-            });
-            
-            document.getElementById('viewLow').addEventListener('click', function() {
-                setRiskFilter('low');
-            });
-            
-            // Export button
-            document.getElementById('exportBtn').addEventListener('click', function() {
-                exportReport();
-            });
-        }
-        
-        // Set view mode
-        function setViewMode(mode) {
-            currentView = mode;
-            document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById('toggle-' + mode).classList.add('active');
-            
-            // Update finding display
-            document.querySelectorAll('.finding').forEach(finding => {
-                if (mode === 'compact') {
-                    finding.classList.add('compact');
-                } else {
-                    finding.classList.remove('compact');
-                }
-            });
-        }
-        
-        // Set risk filter
-        function setRiskFilter(risk) {
-            currentRiskFilter = risk;
-            document.querySelectorAll('.view-toggle').forEach(btn => btn.classList.remove('active'));
-            document.getElementById('view' + risk.charAt(0).toUpperCase() + risk.slice(1)).classList.add('active');
-            
-            // Filter findings by risk level
-            filterFindingsByRisk(risk);
-        }
-        
-        // Filter findings by risk level
-        function filterFindingsByRisk(risk) {
-            document.querySelectorAll('.finding').forEach(finding => {
-                const severity = finding.querySelector('.severity-badge');
-                if (severity) {
-                    const findingRisk = severity.textContent.toLowerCase();
-                    if (risk === 'all' || findingRisk === risk) {
-                        finding.style.display = 'block';
-                    } else {
-                        finding.style.display = 'none';
+                    
+                    // Get target section ID
+                    const targetId = this.getAttribute('href').substring(1);
+                    console.log('Attempting to scroll to:', targetId);
+                    
+                    // Try to find the target element
+                    let targetElement = document.getElementById(targetId);
+                    
+                    // If not found, try to find by class or other methods
+                    if (!targetElement) {
+                        // For pattern categories, look for the category within patterns section
+                        if (targetId !== 'summary' && targetId !== 'vulnerabilities' && targetId !== 'patterns') {
+                            targetElement = document.querySelector('#patterns .pattern-category[id="' + targetId + '"]');
+                        }
                     }
-                }
-            });
-        }
-        
-        // Initialize filters
-        function initializeFilters() {
-            // Search functionality
-            document.querySelectorAll('input[type="text"]').forEach(input => {
-                input.addEventListener('input', function() {
-                    const searchTerm = this.value.toLowerCase();
-                    const sectionId = this.id.replace('Search', '');
-                    searchInSection(sectionId, searchTerm);
+                    
+                    if (targetElement) {
+                        console.log('Found target element, scrolling...');
+                        targetElement.scrollIntoView({ 
+                            behavior: 'smooth',
+                            block: 'start',
+                            inline: 'nearest'
+                        });
+                    } else {
+                        console.log('Target element not found:', targetId);
+                        // Fallback: scroll to top
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
                 });
             });
             
-            // Filter dropdowns
-            document.querySelectorAll('select').forEach(select => {
-                select.addEventListener('change', function() {
-                    const sectionId = this.id.replace('Filter', '');
-                    applyFilters(sectionId);
-                });
-            });
-        }
+            // Add smooth scrolling for better UX
+            document.documentElement.style.scrollBehavior = 'smooth';
+        });
         
-        // Search in section
-        function searchInSection(sectionId, searchTerm) {
-            const section = document.getElementById(sectionId + '-section');
-            if (!section) return;
+        // Mobile menu toggle
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const mainContent = document.querySelector('.main-content');
             
-            const findings = section.querySelectorAll('.finding');
-            findings.forEach(finding => {
-                const text = finding.textContent.toLowerCase();
-                if (text.includes(searchTerm)) {
-                    finding.style.display = 'block';
+            sidebar.classList.toggle('collapsed');
+            
+            // On mobile, also adjust main content
+            if (window.innerWidth <= 768) {
+                if (sidebar.classList.contains('collapsed')) {
+                    mainContent.style.marginLeft = '0';
                 } else {
-                    finding.style.display = 'none';
+                    mainContent.style.marginLeft = '0';
                 }
-            });
+            }
         }
         
-        // Apply filters
-        function applyFilters(sectionId) {
-            const section = document.getElementById(sectionId + '-section');
-            if (!section) return;
+        // Add responsive behavior for badges
+        function handleResize() {
+            const sidebar = document.querySelector('.sidebar');
+            const badges = document.querySelectorAll('.nav-badge');
             
-            const searchInput = document.getElementById(sectionId + 'Search');
-            const filterSelect = document.getElementById(sectionId + 'Filter');
-            
-            const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-            const filterValue = filterSelect ? filterSelect.value : 'all';
-            
-            const findings = section.querySelectorAll('.finding');
-            findings.forEach(finding => {
-                const text = finding.textContent.toLowerCase();
-                const hasContext = finding.querySelector('.context-full') !== null;
-                
-                let showFinding = true;
-                
-                // Search filter
-                if (searchTerm && !text.includes(searchTerm)) {
-                    showFinding = false;
-                }
-                
-                // Context filter
-                if (filterValue === 'with-context' && !hasContext) {
-                    showFinding = false;
-                } else if (filterValue === 'without-context' && hasContext) {
-                    showFinding = false;
-                }
-                
-                finding.style.display = showFinding ? 'block' : 'none';
-            });
+            // Adjust badge size based on sidebar width
+            if (sidebar.offsetWidth < 300) {
+                badges.forEach(badge => {
+                    badge.style.fontSize = '0.6rem';
+                    badge.style.padding = '0.1rem 0.3rem';
+                });
+            } else {
+                badges.forEach(badge => {
+                    badge.style.fontSize = '0.7rem';
+                    badge.style.padding = '0.2rem 0.5rem';
+                });
+            }
         }
         
-        // Update context visibility
-        function updateContextVisibility() {
-            document.querySelectorAll('.context-full').forEach(context => {
-                context.style.display = 'block';
-            });
-        }
+        // Handle window resize
+        window.addEventListener('resize', handleResize);
         
-        // Export functionality
-        function exportReport() {
-            const data = {
-                apkName: '{{.APKName}}',
-                scanTime: '{{.ScanTime}}',
-                totalFindings: {{.TotalFindings}},
-                summary: {
-                    totalFiles: {{.Summary.TotalFiles}},
-                    totalPatterns: {{.Summary.TotalPatterns}},
-                    vulnerabilities: {{.Summary.Vulnerabilities}},
-                    highRisk: {{.Summary.HighRisk}}
-                },
-                currentSection: currentSection,
-                currentView: currentView,
-                showContext: showContext,
-                riskFilter: currentRiskFilter
-            };
-            
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'apkx-report-export.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-        
-        // Toggle context for individual findings
-        function toggleContext(categoryName, index) {
-            // No-op: full context is always visible now
-            return;
-        }
+        // Initialize on load
+        window.addEventListener('load', handleResize);
     </script>
 </body>
 </html>

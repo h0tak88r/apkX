@@ -1,24 +1,57 @@
-# Speed up builds and avoid permission issues
+# Git
 .git
 .gitignore
 
-# Local data and reports
-web-data/uploads
-web-data/downloads
-web-data/reports
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
 
-# Binaries / build artifacts
+# Build artifacts
 apkx
 apkx-web
-bin/
-*.tar.gz
-*.zip
+server
+*.exe
+*.dll
+*.so
+*.dylib
 
-# Node / Python caches
-node_modules
-__pycache__
-*.pyc
-
-# Editor/OS files
-.DS_Store
+# IDE files
+.vscode/
+.idea/
 *.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test-ios-output/
+test_ios.sh
+test-ios.sh
+
+# Web data (will be mounted as volumes)
+web-data/uploads/*
+web-data/reports/*
+web-data/downloads/*
+!web-data/uploads/.gitkeep
+!web-data/reports/.gitkeep
+!web-data/downloads/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Node modules (if any)
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Go build cache
+go.sum.bak

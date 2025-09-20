@@ -1,11 +1,11 @@
 # apkX 🔍⏱️
 
-Advanced APK analysis tool with intelligent caching, pattern matching, comprehensive security vulnerability detection, and **web portal interface**
+Advanced mobile app analysis tool with intelligent caching, pattern matching, comprehensive security vulnerability detection, and **web portal interface**. Supports Android APK, iOS IPA, and XAPK files.
 
 ![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![GitHub Actions](https://img.shields.io/badge/github-actions-blue.svg)
-![Version](https://img.shields.io/badge/version-v3.1.0-orange.svg)
+![Version](https://img.shields.io/badge/version-v3.3.0-orange.svg)
 [![Build and Release](https://github.com/h0tak88r/apkX/actions/workflows/build.yml/badge.svg)](https://github.com/h0tak88r/apkX/actions/workflows/build.yml)
 
 ## Features ✨
@@ -52,11 +52,42 @@ Advanced APK analysis tool with intelligent caching, pattern matching, comprehen
 - 💾 Efficient disk usage with SHA256-based caching
 - 🤖 Discord webhook integration for automated notifications
 
+## What's New in v3.3.0 🆕
+
+### 🐳 **Docker Support (NEW!)**
+- **One-Command Setup**: Run `./docker-setup.sh` and you're ready!
+- **All Dependencies Included**: JADX, apkeep, ipatool, apk-mitm pre-installed
+- **Cross-Platform**: Works on Linux, macOS, and Windows
+- **No Manual Installation**: Everything configured automatically
+- **Persistent Data**: Reports and uploads persist between restarts
+
+### 🎨 **Enhanced UI/UX**
+- **Modern Sidebar Design**: Clean, responsive navigation
+- **Mobile-Friendly**: Responsive design with collapsible sidebar
+- **Word Wrapping**: Long code lines wrap properly on all screen sizes
+- **Better Navigation**: Smooth scrolling and active state management
+- **Upload Success Alerts**: Clear feedback when files are uploaded
+
+### 🔧 **iOS Analysis Improvements**
+- **Binary Plist Support**: Automatic conversion of binary plists to readable format
+- **Enhanced Pattern Matching**: iOS-specific regex patterns for better detection
+- **Plist Download**: Download Info.plist files directly from reports
+- **File Filtering**: Skips static iOS directories for faster analysis
+- **Objective-C Support**: Analyzes .m, .mm, and .h files
+
+### 🛠️ **Technical Improvements**
+- **Fixed Docker Volume Mounting**: Reports directory now works correctly
+- **Better Error Handling**: More descriptive error messages
+- **File Validation**: Prevents processing of empty or corrupted files
+- **Health Checks**: Container health monitoring
+- **Optimized Build**: Smaller Docker images with better caching
+
 ### 🌐 **Web Portal Interface**
 - 🖥️ **Modern Web UI**: Beautiful, responsive web interface
 - 🌙 **Dark/Light Mode**: Toggle between themes with persistent preferences
-- 📤 **Drag & Drop Upload**: Easy APK file upload with progress tracking
+- 📤 **Drag & Drop Upload**: Easy APK/IPA file upload with progress tracking
 - ⬇️ **APK Download**: Download APKs by package name from multiple sources
+- 🍎 **iOS App Download**: Download iOS apps by bundle ID using ipatool
 - 🔔 **Discord Integration**: Per-upload webhook configuration
 - 📊 **Report Management**: View and download all analysis reports
 - 📱 **Mobile Friendly**: Responsive design works on all devices
@@ -64,13 +95,22 @@ Advanced APK analysis tool with intelligent caching, pattern matching, comprehen
 - ⚡ **Async Processing**: Non-blocking analysis with real-time job status
 
 ## Requirements 🛠️
+
+### Android Analysis
 - Go 1.21+
 - Java 8+ (for JADX)
 - JADX (automatically downloaded if not found)
 
+### iOS Analysis
+- macOS (required for ipatool)
+- ipatool (for iOS app downloading)
+- class-dump-z (for binary analysis)
+- otool (comes with Xcode Command Line Tools)
+- plutil (comes with macOS)
+
 ### System prerequisites
 - unzip, zip, tar, curl, git
-- Linux or macOS recommended (Windows supported via WSL)
+- Linux, macOS, or Windows (via WSL)
 
 ### Optional but recommended tools
 - Node.js 16+ and npm (for `apk-mitm` if you enable MITM patching)
@@ -83,11 +123,43 @@ npm install -g apk-mitm
 
 # apkeep (APK download by package name)
 pip install --upgrade apkeep
+
+# iOS dependencies (macOS only)
+bash scripts/install_ios_deps.sh
 ```
 
 Notes:
 - MITM patching is optional. If `apk-mitm` is not installed or fails, analysis continues on the original APK.
 - XAPK files are supported; apkX automatically extracts the embedded APK before analysis.
+
+## Quick Start 🚀
+
+### Option 1: Docker (Recommended) 🐳
+
+The easiest way to run apkX is using Docker:
+
+```bash
+# Clone the repository
+git clone https://github.com/h0tak88r/apkX.git
+cd apkX
+
+# Run the setup script
+./docker-setup.sh
+```
+
+That's it! The web interface will be available at `http://localhost:9090`
+
+**What's included in Docker:**
+- ✅ All dependencies pre-installed (JADX, apkeep, ipatool, apk-mitm)
+- ✅ Java Runtime and Node.js included
+- ✅ Cross-platform support (Linux, macOS, Windows)
+- ✅ Persistent data storage
+- ✅ Health monitoring and auto-restart
+- ✅ No manual setup required
+
+For detailed Docker instructions, see [DOCKER.md](DOCKER.md)
+
+### Option 2: Manual Installation
 
 ## Installation 📦
 ```bash
@@ -257,6 +329,8 @@ Then open `http://localhost:9090` in your browser to:
 - Real-time job status tracking
 
 ### **📱 Command Line Interface**
+
+#### Android Apps
 ```bash
 # Basic usage
 ./apkx [flags] <apk-file(s)>
@@ -272,6 +346,24 @@ Then open `http://localhost:9090` in your browser to:
 
 # Control worker count
 ./apkx -w 5 app.apk
+```
+
+#### iOS Apps
+```bash
+# Setup iOS authentication (macOS only)
+bash scripts/setup_ios_auth.sh
+
+# Download and analyze iOS app by bundle ID
+./apkx -bundle-id com.apple.mobilesafari -download-ios -html
+
+# Download specific version
+./apkx -bundle-id com.apple.mobilesafari -ios-version 1.0.0 -download-ios -html
+
+# Analyze existing IPA file (works on all platforms)
+./apkx -ipa app.ipa -html
+
+# Analyze IPA with custom output
+./apkx -ipa app.ipa -o ios-results -html
 ```
 
 ### **Security Analysis Commands**
@@ -296,12 +388,24 @@ Then open `http://localhost:9090` in your browser to:
 ```
 
 ### **Command Line Flags**
-- `-apk`: Path to APK file
+
+#### General Flags
 - `-o`: Output directory (default: "apkx-output")
 - `-p`: Path to patterns file (default: "config/regexes.yaml")
 - `-w`: Number of concurrent workers (default: 3)
 - `-wh`: Discord webhook URL for sending results (optional)
 - `-html`: Generate HTML report (default: false)
+
+#### Android Flags
+- `-apk`: Path to APK file
+- `-janus`: Enable Janus vulnerability scanning
+- `-task-hijacking`: Only scan for task hijacking vulnerabilities
+
+#### iOS Flags
+- `-ipa`: Path to IPA file
+- `-bundle-id`: iOS app bundle ID to download and analyze
+- `-ios-version`: iOS app version to download (optional)
+- `-download-ios`: Download iOS app using ipatool
 
 ### **Web Server Flags**
 - `-addr`: HTTP listen address (default: ":9090")
@@ -404,6 +508,22 @@ Example JSON output:
 ```
 
 ## Changelog 📝
+
+### **v3.2.0** - iOS Support with ipatool Integration
+- 🍎 **NEW**: Complete iOS app support with ipatool integration
+  - **iOS App Download**: Download iOS apps by bundle ID using ipatool
+  - **IPA Analysis**: Comprehensive static analysis of iOS app files
+  - **iOS Security Analysis**: Keychain access, URL schemes, file protection analysis
+  - **iOS Vulnerability Detection**: Jailbreak detection, transport security checks
+  - **Web Interface**: New iOS download tab in web portal
+- 🔧 **NEW**: Enhanced CLI with iOS-specific flags
+  - `-bundle-id`: Download iOS apps by bundle ID
+  - `-ipa`: Analyze existing IPA files
+  - `-download-ios`: Enable iOS app downloading
+- 📊 **NEW**: iOS-specific analysis patterns and vulnerability detection
+- 🛠️ **NEW**: iOS dependency installation script (`scripts/install_ios_deps.sh`)
+- 📱 **IMPROVED**: Web interface now supports both Android and iOS apps
+- 🔍 **IMPROVED**: Enhanced pattern matching for iOS-specific security issues
 
 ### **v3.1.0** - Comprehensive Android Security Analysis
 - 🛡️ **NEW**: Complete Android Manifest security analysis

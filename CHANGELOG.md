@@ -1,5 +1,34 @@
 # Changelog
 
+## [v3.3.0] - 2025-09-20
+### Added
+- 🐳 **Docker Support**: Complete Docker containerization with one-command setup
+- 🎨 **Enhanced UI/UX**: Modern sidebar design with responsive navigation
+- 📱 **Mobile-Friendly**: Collapsible sidebar and responsive design
+- 🔧 **iOS Analysis Improvements**: Binary plist support and enhanced pattern matching
+- 📄 **Plist Download**: Direct download of Info.plist files from iOS reports
+- 🛠️ **Health Checks**: Container health monitoring and auto-restart
+- 📦 **All Dependencies**: JADX, apkeep, ipatool, apk-mitm pre-installed
+
+### Changed
+- 🎯 **Word Wrapping**: Long code lines now wrap properly on all screen sizes
+- 🚀 **Upload Feedback**: Clear success alerts when files are uploaded
+- 🔍 **Pattern Matching**: iOS-specific regex patterns for better detection
+- 📁 **File Filtering**: Skips static iOS directories for faster analysis
+- 🐳 **Volume Mounting**: Fixed Docker volume mounting for reports directory
+
+### Fixed
+- 🐛 **Docker Volume Issues**: Reports directory now works correctly in containers
+- 🐛 **File Validation**: Prevents processing of empty or corrupted files
+- 🐛 **Error Handling**: More descriptive error messages
+- 🐛 **Navigation**: Sidebar navigation now works properly on all screen sizes
+
+### Technical
+- 📦 **Docker Image**: Optimized build with better caching
+- 🔧 **Dependencies**: Updated to latest stable versions
+- 📋 **Documentation**: Comprehensive Docker setup guide
+- 🧪 **Testing**: Verified cross-platform compatibility
+
 ## [v2.0.0] - 2025-09-07
 ## [v3.2.0] - 2025-09-15
 ### Added

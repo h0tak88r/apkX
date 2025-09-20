@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/h0tak88r/apkX/internal/analyzer"
+	"github.com/h0tak88r/apkX/internal/downloader"
 	"github.com/h0tak88r/apkX/internal/utils"
 )
 
 const (
-	version = "v2.1.0" // Enhanced Discord integration with both JSON and HTML reports
+	version = "v3.2.0" // iOS support with ipatool integration
 )
 
 func printBanner() {
@@ -28,7 +29,8 @@ func printBanner() {
 	fmt.Printf("%s%s%s\n", utils.ColorHeader, banner, utils.ColorEnd)
 	fmt.Printf(" Version: %s\n", version) // Add version display
 	fmt.Println(" --")
-	fmt.Println(" Scanning APK file for URIs, endpoints, secrets & security vulnerabilities")
+	fmt.Println(" Scanning APK/IPA files for URIs, endpoints, secrets & security vulnerabilities")
+	fmt.Println(" Supports: Android APK, iOS IPA, XAPK files")
 	fmt.Println()
 }
 
@@ -41,6 +43,9 @@ func main() {
 
 	var (
 		apkPath       string
+		ipaPath       string
+		bundleID      string
+		iosVersion    string
 		outputDir     string
 		patternsPath  string
 		workers       int
@@ -48,9 +53,13 @@ func main() {
 		taskHijacking bool
 		htmlOutput    bool
 		janusScan     bool
+		downloadIOS   bool
 	)
 
 	flag.StringVar(&apkPath, "apk", "", "Path to APK file")
+	flag.StringVar(&ipaPath, "ipa", "", "Path to IPA file")
+	flag.StringVar(&bundleID, "bundle-id", "", "iOS app bundle ID to download and analyze")
+	flag.StringVar(&iosVersion, "ios-version", "", "iOS app version to download (optional)")
 	flag.StringVar(&outputDir, "o", "apkx-output", "Output directory for results")
 	flag.StringVar(&patternsPath, "p", "config/regexes.yaml", "Path to patterns file")
 	flag.IntVar(&workers, "w", 3, "Number of concurrent workers")
@@ -58,19 +67,38 @@ func main() {
 	flag.BoolVar(&taskHijacking, "task-hijacking", false, "Only scan for task hijacking vulnerabilities")
 	flag.BoolVar(&htmlOutput, "html", false, "Generate HTML report")
 	flag.BoolVar(&janusScan, "janus", false, "Enable Janus vulnerability scanning")
+	flag.BoolVar(&downloadIOS, "download-ios", false, "Download iOS app using ipatool")
 	flag.Parse()
 
-	// Get remaining arguments as APK files
-	apkFiles := flag.Args()
+	// Get remaining arguments as files
+	files := flag.Args()
 
-	// If no additional args but apkPath is set, use that
-	if len(apkFiles) == 0 && apkPath != "" {
-		apkFiles = []string{apkPath}
+	// Handle iOS app download
+	if downloadIOS && bundleID != "" {
+		if err := handleIOSDownload(bundleID, iosVersion, outputDir, patternsPath, webhookURL, htmlOutput); err != nil {
+			fmt.Printf("%sError downloading iOS app: %v%s\n", utils.ColorRed, err, utils.ColorEnd)
+			os.Exit(1)
+		}
+		return
 	}
 
-	// Validate we have at least one APK file
-	if len(apkFiles) == 0 {
-		fmt.Printf("%sError: No APK files specified%s\n", utils.ColorRed, utils.ColorEnd)
+	// Handle IPA file analysis
+	if ipaPath != "" {
+		if err := handleIPAAnalysis(ipaPath, outputDir, patternsPath, webhookURL, htmlOutput); err != nil {
+			fmt.Printf("%sError analyzing IPA: %v%s\n", utils.ColorRed, err, utils.ColorEnd)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// If no additional args but apkPath is set, use that
+	if len(files) == 0 && apkPath != "" {
+		files = []string{apkPath}
+	}
+
+	// Validate we have at least one file
+	if len(files) == 0 {
+		fmt.Printf("%sError: No files specified. Use -apk, -ipa, or -bundle-id%s\n", utils.ColorRed, utils.ColorEnd)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -84,7 +112,7 @@ func main() {
 	}
 
 	// Create work channel and wait group
-	jobs := make(chan string, len(apkFiles))
+	jobs := make(chan string, len(files))
 	var wg sync.WaitGroup
 
 	// Start worker goroutines
@@ -94,12 +122,12 @@ func main() {
 	}
 
 	// Queue jobs
-	for _, apk := range apkFiles {
-		if _, err := os.Stat(apk); os.IsNotExist(err) {
-			fmt.Printf("%sWarning: APK file not found: %s%s\n", utils.ColorYellow, apk, utils.ColorEnd)
+	for _, file := range files {
+		if _, err := os.Stat(file); os.IsNotExist(err) {
+			fmt.Printf("%sWarning: File not found: %s%s\n", utils.ColorYellow, file, utils.ColorEnd)
 			continue
 		}
-		jobs <- apk
+		jobs <- file
 	}
 	close(jobs)
 
@@ -178,4 +206,56 @@ func cleanFileName(name string) string {
 	cleaned = strings.Trim(cleaned, "-")
 
 	return cleaned
+}
+
+// handleIOSDownload downloads and analyzes an iOS app using ipatool
+func handleIOSDownload(bundleID, version, outputDir, patternsPath, webhookURL string, htmlOutput bool) error {
+	fmt.Printf("Downloading iOS app: %s\n", bundleID)
+
+	// Create output directory
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %v", err)
+	}
+
+	// Create iOS downloader
+	iosDownloader := downloader.NewIPAToolDownloader(filepath.Join(outputDir, "downloads"))
+
+	// Download the app
+	ipaPath, err := iosDownloader.DownloadApp(bundleID, version)
+	if err != nil {
+		return fmt.Errorf("failed to download iOS app: %v", err)
+	}
+
+	// Analyze the downloaded IPA
+	return handleIPAAnalysis(ipaPath, outputDir, patternsPath, webhookURL, htmlOutput)
+}
+
+// handleIPAAnalysis analyzes an IPA file
+func handleIPAAnalysis(ipaPath, outputDir, patternsPath, webhookURL string, htmlOutput bool) error {
+	fmt.Printf("Analyzing iOS app: %s\n", filepath.Base(ipaPath))
+
+	// Create output directory
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %v", err)
+	}
+
+	// Create iOS analyzer
+	config := &analyzer.Config{
+		APKPath:      ipaPath,
+		OutputDir:    outputDir,
+		PatternsPath: patternsPath,
+		Workers:      3,
+		WebhookURL:   webhookURL,
+		HTMLOutput:   htmlOutput,
+	}
+
+	iosAnalyzer := analyzer.NewIOSAnalyzer(config)
+
+	// Analyze the IPA
+	if err := iosAnalyzer.AnalyzeIPA(ipaPath); err != nil {
+		return fmt.Errorf("failed to analyze IPA: %v", err)
+	}
+
+	fmt.Printf("iOS analysis completed successfully\n")
+	return nil
 }

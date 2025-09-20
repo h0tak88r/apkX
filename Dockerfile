@@ -1,5 +1,5 @@
-# apkX Web - Docker image (v3.2)
-# Builds the server and bundles optional tools (apk-mitm, apkeep)
+# apkX Web - Docker image (v3.3)
+# Builds the server and bundles all required tools
 
 FROM golang:1.22-bullseye as builder
 
@@ -7,6 +7,7 @@ FROM golang:1.22-bullseye as builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless \
     unzip zip curl git ca-certificates python3 python3-pip \
+    wget build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Optional tools: install apk-mitm (Node) and apkeep binary
@@ -14,6 +15,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && npm install -g apk-mitm \
     && rm -rf /var/lib/apt/lists/*
+
+# Install JADX decompiler
+RUN set -eux; \
+    JADX_VERSION="1.4.7"; \
+    curl -fsSL "https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip" -o /tmp/jadx.zip; \
+    unzip /tmp/jadx.zip -d /tmp/; \
+    mkdir -p /opt/jadx; \
+    mv /tmp/bin /tmp/lib /tmp/LICENSE /tmp/README.md /tmp/NOTICE /opt/jadx/; \
+    ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx; \
+    rm /tmp/jadx.zip
 
 # Install apkeep by downloading prebuilt binary (no PyPI package)
 RUN set -eux; \
@@ -25,6 +36,20 @@ RUN set -eux; \
     esac; \
     curl -fsSL "$APKEEP_URL" -o /usr/local/bin/apkeep; \
     chmod +x /usr/local/bin/apkeep
+
+# Install ipatool for iOS downloads
+RUN set -eux; \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+      amd64)  IPATOOL_URL="https://github.com/majd/ipatool/releases/download/v2.2.0/ipatool-2.2.0-linux-amd64.tar.gz" ;; \
+      arm64)  IPATOOL_URL="https://github.com/majd/ipatool/releases/download/v2.2.0/ipatool-2.2.0-linux-arm64.tar.gz" ;; \
+      *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
+    esac; \
+    curl -fsSL "$IPATOOL_URL" -o /tmp/ipatool.tar.gz; \
+    tar -xzf /tmp/ipatool.tar.gz -C /tmp/; \
+    mv /tmp/bin/ipatool-2.2.0-linux-${ARCH} /usr/local/bin/ipatool; \
+    chmod +x /usr/local/bin/ipatool; \
+    rm /tmp/ipatool.tar.gz
 
 WORKDIR /app
 
@@ -47,15 +72,26 @@ ENV PORT=9090
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless \
     unzip zip curl ca-certificates python3 python3-pip \
+    wget build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Optional: apk-mitm for download/MITM features and apkeep binary
+# Install Node.js and apk-mitm
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && npm install -g apk-mitm \
     && rm -rf /var/lib/apt/lists/*
 
-# Install apkeep binary matching target arch (no buildx needed)
+# Install JADX decompiler
+RUN set -eux; \
+    JADX_VERSION="1.4.7"; \
+    curl -fsSL "https://github.com/skylot/jadx/releases/download/v${JADX_VERSION}/jadx-${JADX_VERSION}.zip" -o /tmp/jadx.zip; \
+    unzip /tmp/jadx.zip -d /tmp/; \
+    mkdir -p /opt/jadx; \
+    mv /tmp/bin /tmp/lib /tmp/LICENSE /tmp/README.md /tmp/NOTICE /opt/jadx/; \
+    ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx; \
+    rm /tmp/jadx.zip
+
+# Install apkeep binary
 RUN set -eux; \
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
@@ -65,6 +101,20 @@ RUN set -eux; \
     esac; \
     curl -fsSL "$APKEEP_URL" -o /usr/local/bin/apkeep; \
     chmod +x /usr/local/bin/apkeep
+
+# Install ipatool for iOS downloads
+RUN set -eux; \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+      amd64)  IPATOOL_URL="https://github.com/majd/ipatool/releases/download/v2.2.0/ipatool-2.2.0-linux-amd64.tar.gz" ;; \
+      arm64)  IPATOOL_URL="https://github.com/majd/ipatool/releases/download/v2.2.0/ipatool-2.2.0-linux-arm64.tar.gz" ;; \
+      *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
+    esac; \
+    curl -fsSL "$IPATOOL_URL" -o /tmp/ipatool.tar.gz; \
+    tar -xzf /tmp/ipatool.tar.gz -C /tmp/; \
+    mv /tmp/bin/ipatool-2.2.0-linux-${ARCH} /usr/local/bin/ipatool; \
+    chmod +x /usr/local/bin/ipatool; \
+    rm /tmp/ipatool.tar.gz
 
 WORKDIR /app
 
