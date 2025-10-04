@@ -114,7 +114,7 @@ func (g *GitLabStorage) DownloadFile(remotePath, localPath string) error {
 
 // ListFiles lists files in a directory
 func (g *GitLabStorage) ListFiles(remotePath string) ([]FileInfo, error) {
-	apiURL := fmt.Sprintf("%s/projects/%s/repository/tree?ref=%s&path=%s",
+	apiURL := fmt.Sprintf("%s/projects/%s/repository/tree?ref=%s&path=%s&recursive=true",
 		g.BaseURL, g.ProjectID, g.Branch, url.QueryEscape(remotePath))
 
 	req, err := http.NewRequest("GET", apiURL, nil)
@@ -147,12 +147,11 @@ func (g *GitLabStorage) ListFiles(remotePath string) ([]FileInfo, error) {
 
 	var files []FileInfo
 	for _, item := range items {
-		if item.Type == "blob" { // Only files, not directories
-			files = append(files, FileInfo{
-				Name: item.Name,
-				Path: item.Path,
-			})
-		}
+		// Include both files (blob) and directories (tree)
+		files = append(files, FileInfo{
+			Name: item.Name,
+			Path: item.Path,
+		})
 	}
 
 	return files, nil

@@ -2101,8 +2101,8 @@ func saveUploadedFile(file multipart.File, header *multipart.FileHeader) (string
 		// Save to temp file and GitLab simultaneously
 		tee := io.TeeReader(file, out)
 		
-		// Upload to GitLab
-		storagePath := "uploads/" + safeFilename
+		// Upload to GitLab (with web-data prefix)
+		storagePath := "web-data/uploads/" + safeFilename
 		if err := storageBackend.SaveFile(storagePath, tee); err != nil {
 			out.Close()
 			log.Printf("⚠️  Warning: Failed to upload to GitLab: %v", err)
@@ -2798,8 +2798,8 @@ func handleReportsFromGitLab(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// Build GitLab storage path
-	storagePath := "reports/" + path
+	// Build GitLab storage path (with web-data prefix)
+	storagePath := "web-data/reports/" + path
 	
 	log.Printf("📥 Serving report from GitLab: %s", storagePath)
 	
@@ -2836,8 +2836,8 @@ func handleReportsFromGitLab(w http.ResponseWriter, r *http.Request) {
 func listReportsFromGitLab() []reportRow {
 	log.Printf("📥 Fetching reports list from GitLab...")
 	
-	// List files in reports directory
-	files, err := storageBackend.ListFiles("reports")
+	// List files in reports directory (using web-data prefix)
+	files, err := storageBackend.ListFiles("web-data/reports")
 	if err != nil {
 		log.Printf("⚠️  Failed to list reports from GitLab: %v", err)
 		return nil
@@ -2846,10 +2846,10 @@ func listReportsFromGitLab() []reportRow {
 	// Group files by report ID (directory name)
 	reportMap := make(map[string]bool)
 	for _, file := range files {
-		// Extract report ID from path (e.g., "reports/20251004-001512/results.json" -> "20251004-001512")
+		// Extract report ID from path (e.g., "web-data/reports/20251004-001512/results.json" -> "20251004-001512")
 		parts := strings.Split(file.Path, "/")
-		if len(parts) >= 2 {
-			reportID := parts[1]
+		if len(parts) >= 3 {
+			reportID := parts[2]
 			reportMap[reportID] = true
 		}
 	}
@@ -2858,7 +2858,7 @@ func listReportsFromGitLab() []reportRow {
 	var rows []reportRow
 	for reportID := range reportMap {
 		// Try to read metadata file
-		metaPath := fmt.Sprintf("reports/%s/apk.name", reportID)
+		metaPath := fmt.Sprintf("web-data/reports/%s/apk.name", reportID)
 		metaReader, err := storageBackend.ReadFile(metaPath)
 		
 		var apkName string
@@ -2895,8 +2895,8 @@ func listReportsFromGitLab() []reportRow {
 		}
 		
 		// Check if report files exist
-		hasJSON := fileExistsInGitLab(fmt.Sprintf("reports/%s/results.json", reportID))
-		hasHTML := fileExistsInGitLab(fmt.Sprintf("reports/%s/security-report.html", reportID))
+		hasJSON := fileExistsInGitLab(fmt.Sprintf("web-data/reports/%s/results.json", reportID))
+		hasHTML := fileExistsInGitLab(fmt.Sprintf("web-data/reports/%s/security-report.html", reportID))
 		
 		row := reportRow{
 			ID:   reportID,
@@ -2944,8 +2944,8 @@ func uploadReportToGitLab(reportDir, reportID string) {
 			return nil
 		}
 		
-		// Create GitLab storage path
-		storagePath := fmt.Sprintf("reports/%s/%s", reportID, relPath)
+		// Create GitLab storage path (with web-data prefix)
+		storagePath := fmt.Sprintf("web-data/reports/%s/%s", reportID, relPath)
 		
 		// Read and upload file
 		f, err := os.Open(path)
