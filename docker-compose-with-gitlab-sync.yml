@@ -11,7 +11,7 @@ services:
       dockerfile: Dockerfile
     container_name: apkx-web
     ports:
-      - "9090:9090"
+      - "0.0.0.0:9090:9090"  # Bind to all interfaces (public IP)
     volumes:
       - ./config:/config  # Only config needed
     environment:
