@@ -1,0 +1,37 @@
+# GitLab-specific Docker Compose configuration for apkX
+# This uses GitLab Container Registry images
+
+version: '3.8'
+
+services:
+  apkx-web:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/yourusername/apkx}:latest
+    container_name: apkx-web
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./web-data:/web-data
+      - ./config:/config
+    environment:
+      - APKX_UPLOAD_DIR=/web-data/uploads
+      - APKX_REPORTS_DIR=/web-data/reports
+      - APKX_DOWNLOAD_DIR=/web-data/downloads
+      - APKX_PATTERNS_PATH=/config/regexes.yaml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Redis for session storage (if you want to add it later)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: apkx-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+
+# volumes:
+#   redis_data:

@@ -163,10 +163,34 @@ func (d *IPAToolDownloader) findDownloadedIPA(bundleID string) (string, error) {
 		if !entry.IsDir() {
 			fileName := strings.ToLower(entry.Name())
 			if strings.HasSuffix(fileName, ".ipa") {
-				// Check if this file is related to our bundle ID
+				// Check if this file is related to our bundle ID or app ID
+				// ipatool names files like: 1266591536_5.53.2.ipa (appID_version.ipa)
+				// or by bundle ID like: com.example.app_1.0.0.ipa
 				if strings.Contains(entry.Name(), bundleID) ||
-					strings.Contains(entry.Name(), strings.ReplaceAll(bundleID, ".", "_")) {
+					strings.Contains(entry.Name(), strings.ReplaceAll(bundleID, ".", "_")) ||
+					strings.HasPrefix(entry.Name(), bundleID+"_") {
 
+					info, err := entry.Info()
+					if err != nil {
+						continue
+					}
+
+					if info.ModTime().After(latestTime) {
+						latestTime = info.ModTime()
+						latestFile = filepath.Join(d.OutputDir, entry.Name())
+					}
+				}
+			}
+		}
+	}
+
+	if latestFile == "" {
+		// If no file found, try to find the most recent .ipa file
+		// This handles cases where the naming doesn't match expectations
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				fileName := strings.ToLower(entry.Name())
+				if strings.HasSuffix(fileName, ".ipa") {
 					info, err := entry.Info()
 					if err != nil {
 						continue
