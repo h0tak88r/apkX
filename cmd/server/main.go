@@ -269,9 +269,13 @@ func main() {
 	http.HandleFunc("/api/manifest/", handleDownloadManifest)
 	http.HandleFunc("/api/plist/", handleDownloadPlist)
 
-	// Serve reports statically
-	fs := http.FileServer(http.Dir(reportsRoot))
-	http.Handle("/reports/", http.StripPrefix("/reports/", fs))
+	// Serve reports (from GitLab or local)
+	if useGitLabStorage {
+		http.HandleFunc("/reports/", handleReportsFromGitLab)
+	} else {
+		fs := http.FileServer(http.Dir(reportsRoot))
+		http.Handle("/reports/", http.StripPrefix("/reports/", fs))
+	}
 
 	// Serve downloads statically
 	downloadFs := http.FileServer(http.Dir(downloadDir))
@@ -1766,6 +1770,12 @@ func findDownloadedAPK(packageName string) (string, error) {
 }
 
 func listReports() []reportRow {
+	// If using GitLab storage, list from GitLab
+	if useGitLabStorage {
+		return listReportsFromGitLab()
+	}
+	
+	// Otherwise list from local filesystem
 	entries, err := os.ReadDir(reportsRoot)
 	if err != nil {
 		return nil
@@ -2777,6 +2787,144 @@ func looksLikeRoot(dir string) bool {
 		}
 	}
 	return false
+}
+
+// handleReportsFromGitLab serves report files from GitLab storage
+func handleReportsFromGitLab(w http.ResponseWriter, r *http.Request) {
+	// Extract path (e.g., "/reports/20251004-001512/security-report.html")
+	path := strings.TrimPrefix(r.URL.Path, "/reports/")
+	if path == "" || path == "/" {
+		http.Error(w, "report path required", http.StatusBadRequest)
+		return
+	}
+	
+	// Build GitLab storage path
+	storagePath := "reports/" + path
+	
+	log.Printf("📥 Serving report from GitLab: %s", storagePath)
+	
+	// Read file from GitLab
+	reader, err := storageBackend.ReadFile(storagePath)
+	if err != nil {
+		log.Printf("⚠️  Failed to read %s from GitLab: %v", storagePath, err)
+		http.Error(w, "report not found", http.StatusNotFound)
+		return
+	}
+	defer reader.Close()
+	
+	// Set content type based on file extension
+	contentType := "text/html"
+	if strings.HasSuffix(path, ".json") {
+		contentType = "application/json"
+	} else if strings.HasSuffix(path, ".xml") {
+		contentType = "application/xml"
+	} else if strings.HasSuffix(path, ".plist") {
+		contentType = "application/xml"
+	} else if strings.HasSuffix(path, ".mobileprovision") {
+		contentType = "application/octet-stream"
+	}
+	
+	w.Header().Set("Content-Type", contentType)
+	
+	// Stream file to response
+	if _, err := io.Copy(w, reader); err != nil {
+		log.Printf("⚠️  Failed to stream file: %v", err)
+	}
+}
+
+// listReportsFromGitLab lists all reports from GitLab storage
+func listReportsFromGitLab() []reportRow {
+	log.Printf("📥 Fetching reports list from GitLab...")
+	
+	// List files in reports directory
+	files, err := storageBackend.ListFiles("reports")
+	if err != nil {
+		log.Printf("⚠️  Failed to list reports from GitLab: %v", err)
+		return nil
+	}
+	
+	// Group files by report ID (directory name)
+	reportMap := make(map[string]bool)
+	for _, file := range files {
+		// Extract report ID from path (e.g., "reports/20251004-001512/results.json" -> "20251004-001512")
+		parts := strings.Split(file.Path, "/")
+		if len(parts) >= 2 {
+			reportID := parts[1]
+			reportMap[reportID] = true
+		}
+	}
+	
+	// Create rows for each report
+	var rows []reportRow
+	for reportID := range reportMap {
+		// Try to read metadata file
+		metaPath := fmt.Sprintf("reports/%s/apk.name", reportID)
+		metaReader, err := storageBackend.ReadFile(metaPath)
+		
+		var apkName string
+		var fileType string
+		
+		if err == nil {
+			metaBytes, _ := io.ReadAll(metaReader)
+			metaReader.Close()
+			metaContent := string(metaBytes)
+			
+			// Try to parse as JSON
+			var metaData map[string]string
+			if err := json.Unmarshal(metaBytes, &metaData); err == nil {
+				apkName = metaData["original_apk"]
+				if apkName == "" {
+					apkName = metaData["original_ipa"]
+				}
+			} else {
+				apkName = strings.TrimSpace(metaContent)
+			}
+		} else {
+			apkName = "Unknown"
+		}
+		
+		// Determine file type
+		if strings.HasSuffix(strings.ToLower(apkName), ".apk") {
+			fileType = "APK"
+		} else if strings.HasSuffix(strings.ToLower(apkName), ".xapk") {
+			fileType = "XAPK"
+		} else if strings.HasSuffix(strings.ToLower(apkName), ".ipa") {
+			fileType = "IPA"
+		} else {
+			fileType = "Unknown"
+		}
+		
+		// Check if report files exist
+		hasJSON := fileExistsInGitLab(fmt.Sprintf("reports/%s/results.json", reportID))
+		hasHTML := fileExistsInGitLab(fmt.Sprintf("reports/%s/security-report.html", reportID))
+		
+		row := reportRow{
+			ID:   reportID,
+			APK:  apkName,
+			Type: fileType,
+			When: reportID, // Use ID as timestamp since we don't have ModTime from GitLab easily
+			JSON: hasJSON,
+			HTML: hasHTML,
+		}
+		rows = append(rows, row)
+	}
+	
+	// Sort by ID (newest first)
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+	
+	log.Printf("✅ Found %d reports in GitLab", len(rows))
+	return rows
+}
+
+// fileExistsInGitLab checks if a file exists in GitLab storage
+func fileExistsInGitLab(path string) bool {
+	exists, err := storageBackend.FileExists(path)
+	if err != nil {
+		return false
+	}
+	return exists
 }
 
 // uploadReportToGitLab uploads all report files to GitLab storage
