@@ -1,0 +1,66 @@
+# Dockerfile for apkX with GitLab Storage
+# This image is smaller as it doesn't need to store files locally
+
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apk add --no-cache git
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . ./
+
+# Build both binaries
+RUN go build -o apkx cmd/apkx/main.go
+RUN go build -o apkx-web-gitlab cmd/server-gitlab/main.go
+
+# Final stage - minimal runtime image
+FROM alpine:latest
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    openjdk11-jre \
+    python3 \
+    py3-pip \
+    nodejs \
+    npm \
+    curl \
+    unzip \
+    && rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# Copy binaries from builder
+COPY --from=builder /build/apkx /app/
+COPY --from=builder /build/apkx-web-gitlab /app/apkx-web
+
+# Copy config files (patterns needed for analysis)
+COPY config/ /app/config/
+
+# Install external tools
+RUN pip3 install --no-cache-dir apkeep && \
+    npm install -g apk-mitm
+
+# Create minimal temp directory (no need for large web-data since using GitLab)
+RUN mkdir -p /tmp/apkx
+
+# Environment variables
+ENV APKX_PATTERNS_PATH=/app/config/regexes.yaml
+ENV APKX_TEMP_DIR=/tmp/apkx
+ENV USE_GITLAB_STORAGE=true
+
+# Expose port
+EXPOSE 9090
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:9090/ || exit 1
+
+# Run the GitLab-enabled server
+CMD ["/app/apkx-web", "-addr", ":9090"]
+

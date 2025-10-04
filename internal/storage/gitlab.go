@@ -389,3 +389,65 @@ func (g *GitLabStorage) SyncUploadedFiles(localDir, remoteDir string) error {
 	})
 }
 
+// Implementation of StorageBackend interface
+
+// SaveFile saves a file to GitLab (implements StorageBackend)
+func (g *GitLabStorage) SaveFile(path string, content io.Reader) error {
+	// Read content
+	data, err := io.ReadAll(content)
+	if err != nil {
+		return fmt.Errorf("failed to read content: %w", err)
+	}
+
+	// Encode to base64
+	encodedContent := base64.StdEncoding.EncodeToString(data)
+
+	// Check if file exists
+	exists, err := g.FileExists(path)
+	if err != nil {
+		return fmt.Errorf("failed to check file existence: %w", err)
+	}
+
+	if exists {
+		return g.updateFile(path, encodedContent)
+	}
+	return g.createFile(path, encodedContent)
+}
+
+// ReadFile reads a file from GitLab (implements StorageBackend)
+func (g *GitLabStorage) ReadFile(path string) (io.ReadCloser, error) {
+	apiURL := fmt.Sprintf("%s/projects/%s/repository/files/%s/raw?ref=%s",
+		g.BaseURL, g.ProjectID, url.PathEscape(path), g.Branch)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("PRIVATE-TOKEN", g.AccessToken)
+
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download file: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("GitLab API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return resp.Body, nil
+}
+
+// CreateDir is a no-op for GitLab (directories are created implicitly)
+func (g *GitLabStorage) CreateDir(path string) error {
+	return nil // GitLab creates directories implicitly
+}
+
+// GetFileURL returns the GitLab raw file URL
+func (g *GitLabStorage) GetFileURL(path string) string {
+	return fmt.Sprintf("https://gitlab.com/api/v4/projects/%s/repository/files/%s/raw?ref=%s&private_token=%s",
+		g.ProjectID, url.PathEscape(path), g.Branch, g.AccessToken)
+}
+
