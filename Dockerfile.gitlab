@@ -42,9 +42,9 @@ COPY --from=builder /build/apkx-web-gitlab /app/apkx-web
 # Copy config files (patterns needed for analysis)
 COPY config/ /app/config/
 
-# Install external tools
-RUN pip3 install --no-cache-dir apkeep && \
-    npm install -g apk-mitm
+# Install external tools (optional - for APK download and MITM features)
+# Note: apkeep may not be available on Alpine, install only if needed
+RUN npm install -g apk-mitm || true
 
 # Create minimal temp directory (no need for large web-data since using GitLab)
 RUN mkdir -p /tmp/apkx
