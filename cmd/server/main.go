@@ -19,6 +19,7 @@ import (
 
 	"github.com/h0tak88r/apkX/internal/analyzer"
 	"github.com/h0tak88r/apkX/internal/downloader"
+	"github.com/h0tak88r/apkX/internal/storage"
 )
 
 var (
@@ -26,27 +27,72 @@ var (
 	reportsRoot         string
 	downloadDir         string
 	patternsPathDefault string
+	
+	// Storage backend (GitLab or Local)
+	storageBackend storage.StorageBackend
+	useGitLabStorage bool
+	tempDir string // For temporary processing
 )
 
 func init() {
 	root := detectProjectRoot()
 
-	if v := os.Getenv("APKX_UPLOAD_DIR"); v != "" {
-		uploadDir = v
-	} else {
-		uploadDir = filepath.Join(root, "web-data", "uploads")
+	// Check if GitLab storage should be used
+	useGitLabStorage = false
+	
+	if os.Getenv("USE_GITLAB_STORAGE") == "true" {
+		gitlabProject := os.Getenv("GITLAB_PROJECT")
+		gitlabToken := os.Getenv("GITLAB_TOKEN")
+		
+		if gitlabProject != "" && gitlabToken != "" {
+			log.Printf("🔄 Initializing GitLab storage backend (project: %s)", gitlabProject)
+			gitlab := storage.NewGitLabStorage(gitlabProject, gitlabToken)
+			
+			// Ensure storage branch exists
+			if err := gitlab.EnsureBranchExists(); err != nil {
+				log.Printf("⚠️  Warning: Failed to ensure GitLab branch exists: %v", err)
+				log.Printf("⚠️  Falling back to local storage")
+			} else {
+				storageBackend = gitlab
+				useGitLabStorage = true
+				log.Printf("✅ GitLab storage active - files will be stored in GitLab")
+				
+				// Use temp directory for processing
+				tempDir = os.Getenv("APKX_TEMP_DIR")
+				if tempDir == "" {
+					tempDir = "/tmp/apkx"
+				}
+				uploadDir = filepath.Join(tempDir, "uploads")
+				reportsRoot = filepath.Join(tempDir, "reports")
+				downloadDir = filepath.Join(tempDir, "downloads")
+			}
+		} else {
+			log.Printf("⚠️  GitLab storage enabled but credentials missing")
+		}
 	}
+	
+	// Use local storage if GitLab not enabled or failed
+	if !useGitLabStorage {
+		log.Printf("📁 Using local filesystem storage")
+		storageBackend = storage.NewLocalStorage(filepath.Join(root, "web-data"))
+		
+		if v := os.Getenv("APKX_UPLOAD_DIR"); v != "" {
+			uploadDir = v
+		} else {
+			uploadDir = filepath.Join(root, "web-data", "uploads")
+		}
 
-	if v := os.Getenv("APKX_REPORTS_DIR"); v != "" {
-		reportsRoot = v
-	} else {
-		reportsRoot = filepath.Join(root, "web-data", "reports")
-	}
+		if v := os.Getenv("APKX_REPORTS_DIR"); v != "" {
+			reportsRoot = v
+		} else {
+			reportsRoot = filepath.Join(root, "web-data", "reports")
+		}
 
-	if v := os.Getenv("APKX_DOWNLOAD_DIR"); v != "" {
-		downloadDir = v
-	} else {
-		downloadDir = filepath.Join(root, "web-data", "downloads")
+		if v := os.Getenv("APKX_DOWNLOAD_DIR"); v != "" {
+			downloadDir = v
+		} else {
+			downloadDir = filepath.Join(root, "web-data", "downloads")
+		}
 	}
 
 	if v := os.Getenv("APKX_PATTERNS_PATH"); v != "" {
@@ -1937,6 +1983,17 @@ func processUploadJob(job *Job, filePath string, r *http.Request) {
 	jobManager.SetJobReportID(job.ID, runID)
 	jobManager.UpdateJobStatus(job.ID, JobCompleted, "Analysis completed successfully")
 	log.Printf("Job %s: Analysis completed successfully", job.ID)
+	
+	// Upload reports to GitLab if enabled
+	if useGitLabStorage {
+		go uploadReportToGitLab(outDir, runID)
+		// Cleanup temp upload file
+		go func() {
+			time.Sleep(5 * time.Second)
+			os.Remove(filePath)
+			log.Printf("🗑️  Cleaned up temp file: %s", filePath)
+		}()
+	}
 }
 
 // processIOSUploadJob handles uploaded iOS IPA files
@@ -2000,6 +2057,17 @@ func processIOSUploadJob(job *Job, ipaPath string, r *http.Request) {
 	jobManager.SetJobReportID(job.ID, runID)
 	jobManager.UpdateJobStatus(job.ID, JobCompleted, "iOS analysis completed successfully")
 	log.Printf("Job %s: iOS analysis completed successfully", job.ID)
+	
+	// Upload reports to GitLab if enabled
+	if useGitLabStorage {
+		go uploadReportToGitLab(outDir, runID)
+		// Cleanup temp upload file
+		go func() {
+			time.Sleep(5 * time.Second)
+			os.Remove(ipaPath)
+			log.Printf("🗑️  Cleaned up temp file: %s", ipaPath)
+		}()
+	}
 }
 
 func saveUploadedFile(file multipart.File, header *multipart.FileHeader) (string, error) {
@@ -2008,24 +2076,54 @@ func saveUploadedFile(file multipart.File, header *multipart.FileHeader) (string
 		return "", fmt.Errorf("uploaded file is empty (0 bytes). Please check the file and try again")
 	}
 
-	dst := filepath.Join(uploadDir, safeName(header.Filename))
-	out, err := os.Create(dst)
-	if err != nil {
-		return "", err
-	}
-	defer out.Close()
+	safeFilename := safeName(header.Filename)
+	
+	if useGitLabStorage {
+		// Save to temp directory for processing
+		dst := filepath.Join(uploadDir, safeFilename)
+		os.MkdirAll(filepath.Dir(dst), 0755)
+		
+		out, err := os.Create(dst)
+		if err != nil {
+			return "", err
+		}
+		
+		// Save to temp file and GitLab simultaneously
+		tee := io.TeeReader(file, out)
+		
+		// Upload to GitLab
+		storagePath := "uploads/" + safeFilename
+		if err := storageBackend.SaveFile(storagePath, tee); err != nil {
+			out.Close()
+			log.Printf("⚠️  Warning: Failed to upload to GitLab: %v", err)
+			// Continue anyway, file is in temp
+		} else {
+			log.Printf("✅ Uploaded to GitLab: %s", storagePath)
+		}
+		
+		out.Close()
+		return dst, nil
+	} else {
+		// Local storage (original behavior)
+		dst := filepath.Join(uploadDir, safeFilename)
+		out, err := os.Create(dst)
+		if err != nil {
+			return "", err
+		}
+		defer out.Close()
 
-	bytesWritten, err := io.Copy(out, file)
-	if err != nil {
-		return "", err
-	}
+		bytesWritten, err := io.Copy(out, file)
+		if err != nil {
+			return "", err
+		}
 
-	// Double-check the saved file size
-	if bytesWritten == 0 {
-		return "", fmt.Errorf("saved file is empty (0 bytes). The uploaded file may be corrupted")
-	}
+		// Double-check the saved file size
+		if bytesWritten == 0 {
+			return "", fmt.Errorf("saved file is empty (0 bytes). The uploaded file may be corrupted")
+		}
 
-	return dst, nil
+		return dst, nil
+	}
 }
 
 func safeName(name string) string {
@@ -2679,4 +2777,55 @@ func looksLikeRoot(dir string) bool {
 		}
 	}
 	return false
+}
+
+// uploadReportToGitLab uploads all report files to GitLab storage
+func uploadReportToGitLab(reportDir, reportID string) {
+	log.Printf("📤 Uploading report %s to GitLab...", reportID)
+	uploaded := 0
+	failed := 0
+	
+	filepath.Walk(reportDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		
+		// Get relative path from report dir
+		relPath, err := filepath.Rel(reportDir, path)
+		if err != nil {
+			return nil
+		}
+		
+		// Create GitLab storage path
+		storagePath := fmt.Sprintf("reports/%s/%s", reportID, relPath)
+		
+		// Read and upload file
+		f, err := os.Open(path)
+		if err != nil {
+			log.Printf("⚠️  Failed to open %s: %v", path, err)
+			failed++
+			return nil
+		}
+		defer f.Close()
+		
+		if err := storageBackend.SaveFile(storagePath, f); err != nil {
+			log.Printf("⚠️  Failed to upload %s: %v", storagePath, err)
+			failed++
+		} else {
+			uploaded++
+		}
+		
+		return nil
+	})
+	
+	log.Printf("✅ Report uploaded to GitLab: %d files uploaded, %d failed", uploaded, failed)
+	
+	// Cleanup temp report directory after successful upload
+	if failed == 0 {
+		go func() {
+			time.Sleep(10 * time.Second)
+			os.RemoveAll(reportDir)
+			log.Printf("🗑️  Cleaned up temp report: %s", reportDir)
+		}()
+	}
 }

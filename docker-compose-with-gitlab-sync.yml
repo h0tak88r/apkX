@@ -4,7 +4,7 @@
 version: '3.8'
 
 services:
-  # Original apkX web server with ALL features
+  # apkX web server with GitLab storage (NO local storage!)
   apkx-web:
     build:
       context: .
@@ -13,13 +13,16 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./web-data:/web-data
-      - ./config:/config
+      - ./config:/config  # Only config needed
     environment:
+      # GitLab Storage Configuration
+      - USE_GITLAB_STORAGE=true
+      - GITLAB_PROJECT=${GITLAB_PROJECT:-e9101230/apkx}
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      - APKX_TEMP_DIR=/tmp/apkx
+      
+      # Application Configuration
       - APKX_ROOT=/app
-      - APKX_UPLOAD_DIR=/web-data/uploads
-      - APKX_REPORTS_DIR=/web-data/reports
-      - APKX_DOWNLOAD_DIR=/web-data/downloads
       - APKX_PATTERNS_PATH=/config/regexes.yaml
       - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
     restart: unless-stopped
@@ -29,19 +32,4 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Background GitLab sync daemon
-  gitlab-sync:
-    build:
-      context: .
-      dockerfile: Dockerfile.sync
-    container_name: apkx-gitlab-sync
-    volumes:
-      - ./web-data:/web-data:ro  # Read-only access
-    environment:
-      - GITLAB_PROJECT=${GITLAB_PROJECT:-e9101230/apkx}
-      - GITLAB_TOKEN=${GITLAB_TOKEN}
-    restart: unless-stopped
-    depends_on:
-      - apkx-web
 
