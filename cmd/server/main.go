@@ -2306,88 +2306,105 @@ func handleInstallAPK(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the APK file for this report
-	reportDir := filepath.Join(reportsRoot, reportID)
-	apkNamePath := filepath.Join(reportDir, "apk.name")
-
-	metaContent, err := os.ReadFile(apkNamePath)
-	if err != nil {
-		http.Error(w, "report not found", http.StatusNotFound)
-		return
+	var metaContent []byte
+	var err error
+	
+	// Read metadata from GitLab or local
+	if useGitLabStorage {
+		metaPath := fmt.Sprintf("web-data/reports/%s/apk.name", reportID)
+		reader, err := storageBackend.ReadFile(metaPath)
+		if err != nil {
+			http.Error(w, "report not found", http.StatusNotFound)
+			return
+		}
+		metaContent, _ = io.ReadAll(reader)
+		reader.Close()
+	} else {
+		reportDir := filepath.Join(reportsRoot, reportID)
+		apkNamePath := filepath.Join(reportDir, "apk.name")
+		metaContent, err = os.ReadFile(apkNamePath)
+		if err != nil {
+			http.Error(w, "report not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	// Try to parse as JSON first (new format)
 	var metaData map[string]string
 	var fileName string
-	var apkPath string
+	var storagePath string
 
 	if err := json.Unmarshal(metaContent, &metaData); err == nil {
 		// New JSON format - check if MITM was enabled
 		mitmEnabled := metaData["mitm_enabled"] == "true"
 
 		if mitmEnabled && metaData["patched_apk"] != "" {
-			// MITM was enabled - serve the patched APK
 			fileName = metaData["patched_apk"]
-			apkPath = filepath.Join(downloadDir, fileName)
+			storagePath = "web-data/downloads/" + fileName
 		} else {
-			// MITM was not enabled - serve the original APK
 			fileName = metaData["original_apk"]
-			// Look for the original APK in uploads or downloads
-			uploadPath := filepath.Join(uploadDir, fileName)
-			downloadPath := filepath.Join(downloadDir, fileName)
-
-			if _, err := os.Stat(uploadPath); err == nil {
-				apkPath = uploadPath
-			} else if _, err := os.Stat(downloadPath); err == nil {
-				apkPath = downloadPath
-			} else {
-				http.Error(w, "APK file not found", http.StatusNotFound)
-				return
+			if fileName == "" {
+				fileName = metaData["original_ipa"]
 			}
+			// Try uploads first, then downloads
+			storagePath = "web-data/uploads/" + fileName
 		}
 	} else {
 		// Old format - just filename
 		fileName = strings.TrimSpace(string(metaContent))
-		// Look for the APK file in uploads or downloads
-		uploadPath := filepath.Join(uploadDir, fileName)
-		downloadPath := filepath.Join(downloadDir, fileName)
+		storagePath = "web-data/uploads/" + fileName
+	}
 
-		if _, err := os.Stat(uploadPath); err == nil {
-			apkPath = uploadPath
-		} else if _, err := os.Stat(downloadPath); err == nil {
-			apkPath = downloadPath
+	// Serve file from GitLab or local
+	if useGitLabStorage {
+		// Try to read from GitLab
+		reader, err := storageBackend.ReadFile(storagePath)
+		if err != nil {
+			// Try alternate location
+			altPath := strings.Replace(storagePath, "uploads", "downloads", 1)
+			reader, err = storageBackend.ReadFile(altPath)
+			if err != nil {
+				log.Printf("APK not found in GitLab: %s or %s", storagePath, altPath)
+				http.Error(w, "APK file not found in storage", http.StatusNotFound)
+				return
+			}
+		}
+		defer reader.Close()
+
+		// Set headers
+		w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+		w.Header().Set("Content-Type", "application/vnd.android.package-archive")
+
+		// Stream file
+		if _, err := io.Copy(w, reader); err != nil {
+			log.Printf("Failed to stream APK: %v", err)
 		} else {
-			http.Error(w, "APK file not found", http.StatusNotFound)
+			log.Printf("✅ APK %s downloaded from GitLab", fileName)
+		}
+	} else {
+		// Local filesystem
+		apkPath := filepath.Join(uploadDir, fileName)
+		if _, err := os.Stat(apkPath); err != nil {
+			apkPath = filepath.Join(downloadDir, fileName)
+			if _, err := os.Stat(apkPath); err != nil {
+				http.Error(w, "APK file not found", http.StatusNotFound)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+		w.Header().Set("Content-Type", "application/vnd.android.package-archive")
+
+		file, err := os.Open(apkPath)
+		if err != nil {
+			http.Error(w, "failed to open file", http.StatusInternalServerError)
 			return
 		}
+		defer file.Close()
+
+		io.Copy(w, file)
+		log.Printf("APK %s downloaded successfully", fileName)
 	}
-
-	// Verify the file exists
-	if _, err := os.Stat(apkPath); err != nil {
-		http.Error(w, "APK file not found", http.StatusNotFound)
-		return
-	}
-
-	// Set headers for file download
-	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
-	w.Header().Set("Content-Type", "application/vnd.android.package-archive")
-
-	// Open and serve the file
-	file, err := os.Open(apkPath)
-	if err != nil {
-		http.Error(w, "failed to open file", http.StatusInternalServerError)
-		return
-	}
-	defer file.Close()
-
-	// Copy file to response
-	_, err = io.Copy(w, file)
-	if err != nil {
-		log.Printf("Failed to serve APK %s: %v", apkPath, err)
-		return
-	}
-
-	log.Printf("APK %s downloaded successfully", fileName)
 }
 
 func applyMITMPatch(apkPath string) (string, error) {
@@ -2472,10 +2489,31 @@ func handleDownloadManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the AndroidManifest.xml file for this report
-	reportDir := filepath.Join(reportsRoot, reportID)
+	// Try to read AndroidManifest.xml from GitLab or local
+	if useGitLabStorage {
+		// Try GitLab storage
+		manifestPath := fmt.Sprintf("web-data/reports/%s/AndroidManifest.xml", reportID)
+		reader, err := storageBackend.ReadFile(manifestPath)
+		if err != nil {
+			log.Printf("Manifest not found in GitLab: %s", manifestPath)
+			http.Error(w, "AndroidManifest.xml not found", http.StatusNotFound)
+			return
+		}
+		defer reader.Close()
 
-	// Look for AndroidManifest.xml in common decompilation output locations
+		w.Header().Set("Content-Disposition", "attachment; filename=AndroidManifest.xml")
+		w.Header().Set("Content-Type", "application/xml")
+
+		if _, err := io.Copy(w, reader); err != nil {
+			log.Printf("Failed to stream manifest: %v", err)
+		} else {
+			log.Printf("✅ Manifest downloaded from GitLab for report %s", reportID)
+		}
+		return
+	}
+
+	// Local filesystem
+	reportDir := filepath.Join(reportsRoot, reportID)
 	manifestPaths := []string{
 		filepath.Join(reportDir, "AndroidManifest.xml"),
 		filepath.Join(reportDir, "sources", "AndroidManifest.xml"),
