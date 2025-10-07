@@ -168,6 +168,64 @@ The web interface will be available at `http://localhost:9090`
 
 Note: `web-data/` (uploads, reports, downloads) and local binaries are ignored via `.gitignore` to prevent accidental commits. Do not commit API keys, tokens, or environment files (`.env*`).
 
+## Installation (Full Guide)
+
+### One-liner (Fresh VPS)
+
+```bash
+git clone https://github.com/h0tak88r/apkX.git && cd apkX && chmod +x docker-setup.sh && ./docker-setup.sh
+```
+
+### Manual Install
+
+1) Install Docker and Docker Compose (Ubuntu/Debian):
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
+
+2) Setup and run:
+```bash
+mkdir -p web-data/uploads web-data/reports web-data/downloads
+docker-compose build && docker-compose up -d
+```
+
+3) Verify:
+```bash
+curl -f http://localhost:9090/
+```
+
+### Configuration
+
+Set environment variables in `docker-compose.yml`:
+```yaml
+environment:
+  - APKX_ROOT=/app
+  - APKX_UPLOAD_DIR=/app/web-data/uploads
+  - APKX_REPORTS_DIR=/app/web-data/reports
+  - APKX_DOWNLOAD_DIR=/app/web-data/downloads
+  - APKX_PATTERNS_PATH=/app/config/regexes.yaml
+```
+
+### Data Persistence
+- `web-data/uploads/` — uploaded APK/IPA
+- `web-data/reports/` — generated reports
+- `web-data/downloads/` — downloaded apps
+
+### Manage
+```bash
+docker-compose logs -f
+docker-compose restart
+docker-compose down
+docker-compose build --no-cache && docker-compose up -d
+```
+
+### Security
+- Open port 9090 on firewall if remote
+- Don’t commit `.env*`, tokens, or webhooks
+- Consider reverse proxy (Nginx) for production
+
 ### Option 2: Manual Installation
 
 ## Installation 📦
