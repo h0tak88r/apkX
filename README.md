@@ -173,7 +173,7 @@ Note: `web-data/` (uploads, reports, downloads) and local binaries are ignored v
 ### One-liner (Fresh VPS)
 
 ```bash
-git clone https://github.com/h0tak88r/apkX.git && cd apkX && chmod +x docker-setup.sh && ./docker-setup.sh
+git clone https://github.com/h0tak88r/apkX.git && cd apkX && chmod +x apkx.sh && ./apkx.sh up
 ```
 
 ### Manual Install
@@ -215,16 +215,32 @@ environment:
 
 ### Manage
 ```bash
-docker-compose logs -f
-docker-compose restart
-docker-compose down
-docker-compose build --no-cache && docker-compose up -d
+./apkx.sh logs
+./apkx.sh restart
+./apkx.sh down
+./apkx.sh deps
 ```
 
 ### Security
 - Open port 9090 on firewall if remote
 - Don’t commit `.env*`, tokens, or webhooks
 - Consider reverse proxy (Nginx) for production
+
+## GitLab Storage Mode (Optional)
+
+You can use GitLab as the backing storage for reports/uploads.
+
+Set the following environment variables and start with the GitLab mode command:
+
+```bash
+export GITLAB_BASE_URL=https://gitlab.com
+export GITLAB_PROJECT_ID=12345678
+export GITLAB_TOKEN=glpat_xxxxxxxxxxxxxxxxx
+
+./apkx.sh up:gitlab
+```
+
+This generates a `docker-compose.override.yml` with the necessary environment and launches the service.
 
 ### Option 2: Manual Installation
 
