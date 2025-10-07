@@ -57,6 +57,9 @@ dist/
 *.aab
 *.log
 *.lock
+RELEASE_NOTES_*.md
+RELEASE_CHECKLIST*.md
+CHANGELOG_*.md
 
 # Temporary & local files
 *.tmp

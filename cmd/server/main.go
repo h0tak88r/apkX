@@ -268,6 +268,7 @@ func main() {
 	http.HandleFunc("/api/install/", handleInstallAPK)
 	http.HandleFunc("/api/manifest/", handleDownloadManifest)
 	http.HandleFunc("/api/plist/", handleDownloadPlist)
+	http.HandleFunc("/api/capacity", handleCapacityCheck)
 
 	// Serve reports (from GitLab or local)
 	if useGitLabStorage {
@@ -1593,6 +1594,42 @@ func handleDeleteJob(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.NotFound(w, r)
 	}
+}
+
+// handleCapacityCheck returns current job capacity status
+func handleCapacityCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	activeJobs := jobManager.GetActiveJobs()
+	runningCount := 0
+	
+	// Count jobs that are actually running (not completed/failed)
+	for _, job := range activeJobs {
+		if job.Status == JobDownloading || job.Status == JobAnalyzing {
+			runningCount++
+		}
+	}
+
+	maxConcurrent := 5 // Maximum concurrent scans
+	available := maxConcurrent - runningCount
+	if available < 0 {
+		available = 0
+	}
+
+	response := map[string]interface{}{
+		"running_jobs":     runningCount,
+		"max_concurrent":   maxConcurrent,
+		"available_slots":  available,
+		"can_start_new":    runningCount < maxConcurrent,
+		"active_jobs":      len(activeJobs),
+		"status":           "ok",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func handleDownloadSimple(w http.ResponseWriter, r *http.Request) {
