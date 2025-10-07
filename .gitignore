@@ -1,5 +1,8 @@
-# Binaries
+# Binaries & build artifacts
 bin/
+apkx
+apkx-web
+server
 *.exe
 *.exe~
 *.dll
@@ -43,8 +46,29 @@ test-h5/
 test-injured/
 test_decompile/
 apkx-output/
+dist/
 *.backup
+*.tar
+*.tar.gz
+*.zip
+*.ipa
+*.apk
+*.xapk
+*.aab
+*.log
+*.lock
 
-# Temporary files
+# Temporary & local files
 *.tmp
 *.temp
+*.swp
+*.swo
+.env
+.env.*
+.DS_Store
+/.cursor/
+/.cursor-server/
+/.cache/
+/.docker/
+/.nvm/
+/.npm/

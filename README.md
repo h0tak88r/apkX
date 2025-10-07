@@ -5,7 +5,7 @@ Advanced mobile app analysis tool with intelligent caching, pattern matching, co
 ![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![GitHub Actions](https://img.shields.io/badge/github-actions-blue.svg)
-![Version](https://img.shields.io/badge/version-v3.3.0-orange.svg)
+![Version](https://img.shields.io/badge/version-v3.3.2-orange.svg)
 [![Build and Release](https://github.com/h0tak88r/apkX/actions/workflows/build.yml/badge.svg)](https://github.com/h0tak88r/apkX/actions/workflows/build.yml)
 
 <img width="1262" height="730" alt="image" src="https://github.com/user-attachments/assets/5b5361a4-7c90-44ce-b09e-2fc30409b94d" />
@@ -165,6 +165,8 @@ The web interface will be available at `http://localhost:9090`
 
 **📖 Installation Guide**: See [INSTALL.md](INSTALL.md) for detailed instructions  
 **🐳 Docker Guide**: See [DOCKER.md](DOCKER.md) for advanced Docker usage
+
+Note: `web-data/` (uploads, reports, downloads) and local binaries are ignored via `.gitignore` to prevent accidental commits. Do not commit API keys, tokens, or environment files (`.env*`).
 
 ### Option 2: Manual Installation
 
