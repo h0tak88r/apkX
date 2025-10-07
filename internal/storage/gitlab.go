@@ -390,8 +390,53 @@ func (g *GitLabStorage) SyncUploadedFiles(localDir, remoteDir string) error {
 
 // Implementation of StorageBackend interface
 
+// ensureDirectoryExists creates a directory structure in GitLab by creating a .gitkeep file
+func (g *GitLabStorage) ensureDirectoryExists(dirPath string) error {
+	if dirPath == "" || dirPath == "." {
+		return nil
+	}
+
+	// Check if directory already exists by trying to list it
+	_, err := g.ListFiles(dirPath)
+	if err == nil {
+		return nil // Directory exists
+	}
+
+	// If it's a 404, the directory doesn't exist, so we need to create it
+	if !strings.Contains(err.Error(), "404") && !strings.Contains(err.Error(), "Not Found") {
+		return err // Some other error
+	}
+
+	// Create parent directory first
+	parentDir := filepath.Dir(dirPath)
+	if parentDir != "" && parentDir != "." && parentDir != dirPath {
+		if err := g.ensureDirectoryExists(parentDir); err != nil {
+			return err
+		}
+	}
+
+	// Create directory by uploading a .gitkeep file
+	gitkeepPath := filepath.Join(dirPath, ".gitkeep")
+	gitkeepContent := "# This file ensures the directory exists in GitLab\n"
+	
+	// Encode to base64
+	encodedContent := base64.StdEncoding.EncodeToString([]byte(gitkeepContent))
+	
+	// Create the .gitkeep file
+	if err := g.createFile(gitkeepPath, encodedContent); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
+	}
+
+	return nil
+}
+
 // SaveFile saves a file to GitLab (implements StorageBackend)
 func (g *GitLabStorage) SaveFile(path string, content io.Reader) error {
+	// Ensure parent directory exists
+	if err := g.ensureDirectoryExists(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("failed to ensure directory exists: %w", err)
+	}
+
 	// Read content
 	data, err := io.ReadAll(content)
 	if err != nil {

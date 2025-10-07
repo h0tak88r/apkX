@@ -74,9 +74,9 @@ version: "3.8"
 services:
   apkx-web:
     environment:
-      - APKX_STORAGE=gitlab
+      - USE_GITLAB_STORAGE=true
       - GITLAB_BASE_URL=${GITLAB_BASE_URL}
-      - GITLAB_PROJECT_ID=${GITLAB_PROJECT_ID}
+      - GITLAB_PROJECT=${GITLAB_PROJECT_ID}
       - GITLAB_TOKEN=${GITLAB_TOKEN}
 YAML
 

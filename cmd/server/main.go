@@ -1545,6 +1545,17 @@ func processDownloadJob(job *Job, r *http.Request) {
 	jobManager.SetJobReportID(job.ID, runID)
 	jobManager.UpdateJobStatus(job.ID, JobCompleted, "Analysis completed successfully")
 	log.Printf("Job %s: Analysis completed successfully", job.ID)
+	
+	// Upload reports to GitLab if enabled
+	if useGitLabStorage {
+		go uploadReportToGitLab(outDir, runID)
+		// Cleanup temp download file
+		go func() {
+			time.Sleep(5 * time.Second)
+			os.Remove(apkPath)
+			log.Printf("🗑️  Cleaned up temp file: %s", apkPath)
+		}()
+	}
 }
 
 func handleJobsAPI(w http.ResponseWriter, r *http.Request) {
@@ -2312,23 +2323,68 @@ func handleDeleteReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if report directory exists
-	reportDir := filepath.Join(reportsRoot, reportID)
-	if _, err := os.Stat(reportDir); os.IsNotExist(err) {
-		http.NotFound(w, r)
-		return
+	if useGitLabStorage {
+		// Delete from GitLab storage
+		if err := deleteReportFromGitLab(reportID); err != nil {
+			log.Printf("Failed to delete report %s from GitLab: %v", reportID, err)
+			http.Error(w, "failed to delete report from GitLab", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("Report %s deleted from GitLab successfully", reportID)
+	} else {
+		// Delete from local storage
+		reportDir := filepath.Join(reportsRoot, reportID)
+		if _, err := os.Stat(reportDir); os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
+
+		if err := os.RemoveAll(reportDir); err != nil {
+			log.Printf("Failed to delete report %s: %v", reportID, err)
+			http.Error(w, "failed to delete report", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("Report %s deleted from local storage successfully", reportID)
 	}
 
-	// Delete the report directory and all its contents
-	if err := os.RemoveAll(reportDir); err != nil {
-		log.Printf("Failed to delete report %s: %v", reportID, err)
-		http.Error(w, "failed to delete report", http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("Report %s deleted successfully", reportID)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+}
+
+// deleteReportFromGitLab deletes a report and its associated files from GitLab storage
+func deleteReportFromGitLab(reportID string) error {
+	// List all files in the report directory
+	reportPath := fmt.Sprintf("web-data/reports/%s", reportID)
+	files, err := storageBackend.ListFiles(reportPath)
+	if err != nil {
+		return fmt.Errorf("failed to list report files: %v", err)
+	}
+
+	// Delete all report files
+	for _, file := range files {
+		filePath := fmt.Sprintf("web-data/reports/%s/%s", reportID, file.Name)
+		if err := storageBackend.DeleteFile(filePath); err != nil {
+			log.Printf("⚠️  Failed to delete file %s: %v", filePath, err)
+		}
+	}
+
+	// Also delete any associated patched APK files
+	// Look for patched APKs that might be associated with this report
+	downloadFiles, err := storageBackend.ListFiles("web-data/downloads")
+	if err == nil {
+		for _, file := range downloadFiles {
+			// Check if this patched APK belongs to this report
+			// (This is a simple heuristic - in practice, you might want to store this mapping)
+			if strings.Contains(file.Name, reportID) || strings.Contains(file.Name, "mitm-patched") {
+				filePath := fmt.Sprintf("web-data/downloads/%s", file.Name)
+				if err := storageBackend.DeleteFile(filePath); err != nil {
+					log.Printf("⚠️  Failed to delete patched APK %s: %v", filePath, err)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func handleInstallAPK(w http.ResponseWriter, r *http.Request) {
@@ -2914,6 +2970,11 @@ func listReportsFromGitLab() []reportRow {
 	// List files in reports directory (using web-data prefix)
 	files, err := storageBackend.ListFiles("web-data/reports")
 	if err != nil {
+		// If directory doesn't exist yet, that's OK - no reports
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not Found") {
+			log.Printf("📁 No reports directory found in GitLab yet - this is normal for new installations")
+			return nil
+		}
 		log.Printf("⚠️  Failed to list reports from GitLab: %v", err)
 		return nil
 	}
@@ -3008,6 +3069,7 @@ func uploadReportToGitLab(reportDir, reportID string) {
 	uploaded := 0
 	failed := 0
 	
+	// Upload report files
 	filepath.Walk(reportDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -3040,6 +3102,31 @@ func uploadReportToGitLab(reportDir, reportID string) {
 		
 		return nil
 	})
+	
+	// Also upload patched APK files if they exist
+	patchedAPKs, err := filepath.Glob(filepath.Join(downloadDir, "*mitm-patched*"))
+	if err == nil && len(patchedAPKs) > 0 {
+		for _, patchedAPK := range patchedAPKs {
+			fileName := filepath.Base(patchedAPK)
+			storagePath := fmt.Sprintf("web-data/downloads/%s", fileName)
+			
+			f, err := os.Open(patchedAPK)
+			if err != nil {
+				log.Printf("⚠️  Failed to open patched APK %s: %v", patchedAPK, err)
+				failed++
+				continue
+			}
+			
+			if err := storageBackend.SaveFile(storagePath, f); err != nil {
+				log.Printf("⚠️  Failed to upload patched APK %s: %v", storagePath, err)
+				failed++
+			} else {
+				uploaded++
+				log.Printf("📤 Uploaded patched APK: %s", fileName)
+			}
+			f.Close()
+		}
+	}
 	
 	log.Printf("✅ Report uploaded to GitLab: %d files uploaded, %d failed", uploaded, failed)
 	
