@@ -62,7 +62,6 @@ run_normal() {
 
 run_gitlab() {
   ensure_dependencies
-  prepare_data_dirs
   echo -e "${BLUE}Configuring GitLab storage...${NC}"
   # Require env vars
   : "${GITLAB_BASE_URL:?Set GITLAB_BASE_URL (e.g., https://gitlab.com)}"

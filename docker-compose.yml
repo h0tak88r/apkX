@@ -21,10 +21,6 @@ services:
     volumes:
       # Mount the entire project directory for source code and config
       - .:/app
-      # Mount specific data directories for persistence
-      - ./web-data/uploads:/app/web-data/uploads
-      - ./web-data/reports:/app/web-data/reports
-      - ./web-data/downloads:/app/web-data/downloads
     command: ["/usr/local/bin/apkx-web", "-addr", ":9090"]
     restart: unless-stopped
     healthcheck:

@@ -209,9 +209,11 @@ environment:
 ```
 
 ### Data Persistence
-- `web-data/uploads/` — uploaded APK/IPA
-- `web-data/reports/` — generated reports
-- `web-data/downloads/` — downloaded apps
+- Default (Docker local mode):
+  - `web-data/uploads/` — uploaded APK/IPA
+  - `web-data/reports/` — generated reports
+  - `web-data/downloads/` — downloaded apps
+- GitLab mode: No local persistence; artifacts are stored in GitLab storage.
 
 ### Manage
 ```bash
