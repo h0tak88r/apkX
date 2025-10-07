@@ -16,6 +16,8 @@ services:
       - APKX_REPORTS_DIR=/app/web-data/reports
       - APKX_DOWNLOAD_DIR=/app/web-data/downloads
       - APKX_PATTERNS_PATH=/app/config/regexes.yaml
+      # iOS download keychain passphrase
+      - IPATOOL_KEYCHAIN_PASSPHRASE=sallam@88
       # Optional: Set a default Discord webhook
       # - DISCORD_WEBHOOK=your_webhook_url_here
     volumes:

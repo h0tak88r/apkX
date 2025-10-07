@@ -42,6 +42,11 @@ func (d *IPAToolDownloader) DownloadApp(bundleID, version string) (string, error
 		return "", fmt.Errorf("ipatool not found in PATH: %v", err)
 	}
 
+	// Check if we're authenticated, if not, try to authenticate
+	if err := d.ensureAuthenticated(); err != nil {
+		return "", fmt.Errorf("authentication failed: %v", err)
+	}
+
 	// Ensure output directory exists
 	if err := os.MkdirAll(d.OutputDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create output directory: %v", err)
@@ -65,14 +70,15 @@ func (d *IPAToolDownloader) DownloadApp(bundleID, version string) (string, error
 	args = append(args, "--format", "text")
 	args = append(args, "--purchase")
 
-	// Add keychain passphrase if available, otherwise use interactive mode
-	if keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE"); keychainPassphrase != "" {
-		args = append(args, "--keychain-passphrase", keychainPassphrase)
-		args = append(args, "--non-interactive")
-	} else {
-		// Use interactive mode if no keychain passphrase is provided
-		fmt.Println("Note: Running in interactive mode. You may need to enter your keychain passphrase.")
+	// Add keychain passphrase - use environment variable or default
+	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
+	if keychainPassphrase == "" {
+		// Use default passphrase if not set in environment
+		keychainPassphrase = "sallam@88"
 	}
+	
+	args = append(args, "--keychain-passphrase", keychainPassphrase)
+	args = append(args, "--non-interactive")
 
 	fmt.Printf("Downloading iOS app: %s (version: %s)\n", bundleID, version)
 
@@ -106,6 +112,14 @@ func (d *IPAToolDownloader) SearchApp(query string, limit int) ([]IPAToolApp, er
 		args = append(args, "--limit", fmt.Sprintf("%d", limit))
 	}
 	args = append(args, "--format", "json")
+	
+	// Add keychain passphrase for authentication
+	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
+	if keychainPassphrase == "" {
+		keychainPassphrase = "sallam@88"
+	}
+	args = append(args, "--keychain-passphrase", keychainPassphrase)
+	args = append(args, "--non-interactive")
 
 	// Execute ipatool search command
 	cmd := exec.Command("ipatool", args...)
@@ -132,6 +146,14 @@ func (d *IPAToolDownloader) GetAppInfo(bundleID string) (*IPAToolApp, error) {
 
 	// Build info command
 	args := []string{"info", bundleID, "--format", "json"}
+	
+	// Add keychain passphrase for authentication
+	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
+	if keychainPassphrase == "" {
+		keychainPassphrase = "sallam@88"
+	}
+	args = append(args, "--keychain-passphrase", keychainPassphrase)
+	args = append(args, "--non-interactive")
 
 	// Execute ipatool info command
 	cmd := exec.Command("ipatool", args...)
@@ -268,4 +290,28 @@ func (d *IPAToolDownloader) CleanupOldIPAs(olderThan time.Duration) error {
 	}
 
 	return nil
+}
+
+// ensureAuthenticated checks if ipatool is authenticated and attempts to authenticate if needed
+func (d *IPAToolDownloader) ensureAuthenticated() error {
+	// Check current authentication status
+	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
+	if keychainPassphrase == "" {
+		keychainPassphrase = "sallam@88"
+	}
+
+	// Try to get account info to check if we're authenticated
+	args := []string{"auth", "info", "--keychain-passphrase", keychainPassphrase, "--non-interactive"}
+	cmd := exec.Command("ipatool", args...)
+	output, err := cmd.CombinedOutput()
+	
+	// If we get account info, we're already authenticated
+	if err == nil && len(output) > 0 {
+		fmt.Printf("Already authenticated with App Store\n")
+		return nil
+	}
+
+	// If not authenticated, we need to provide Apple ID credentials
+	// For now, return an error with instructions
+	return fmt.Errorf("ipatool needs to be authenticated with an Apple ID first. Please run 'ipatool auth login' with your Apple ID credentials. Note: This requires interactive authentication and cannot be automated in Docker containers")
 }

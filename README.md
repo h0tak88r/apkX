@@ -70,9 +70,27 @@ docker-compose up -d
 ### API Endpoints
 - `POST /upload` - Upload APK/IPA files
 - `POST /download` - Download APKs from package managers
+- `POST /download-ios` - Download iOS apps from App Store
 - `GET /api/install/{reportID}` - Download patched APK
 - `DELETE /api/report/delete/{reportID}` - Delete report
 - `GET /api/jobs` - List analysis jobs
+
+### iOS App Download
+For iOS apps, you can use the `download-ios` endpoint:
+
+```bash
+curl -X POST "http://localhost:9090/download-ios" \
+  -d "bundle_id=com.example.app&ios_version=1.0.0"
+```
+
+**Note**: iOS downloads require Apple ID authentication. Before using iOS downloads, you need to authenticate `ipatool` with your Apple ID:
+
+```bash
+# Run this command interactively to authenticate
+docker exec -it apkx-web ipatool auth login
+```
+
+This is a one-time setup that stores your credentials securely in the container's keychain.
 
 ### Command Line
 ```bash
