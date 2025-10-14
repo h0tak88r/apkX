@@ -27,6 +27,14 @@ services:
       - ./config:/app/config:ro
     command: ["/usr/local/bin/apkx-web", "-addr", ":9090", "-mitm"]
     restart: unless-stopped
+    # Only add this if you want to use Traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.apkx.rule=Host(`{APKX_DOMAIN}`)
+      - traefik.http.routers.apkx.entrypoints=web,websecure
+      - traefik.http.routers.apkx.tls=true
+      - traefik.http.routers.apkx.tls.certresolver=letsencrypt
+      - traefik.http.services.apkx.loadbalancer.server.port=9090
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9090/"]
       interval: 30s
