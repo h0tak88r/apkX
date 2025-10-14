@@ -26,6 +26,9 @@ patterns:
   - name: Bitmovin API Key
     regex: BITMOVIN_API_KEY\s?=\s?['|"]?.*['|"]?
 
+  - name: Default API Key
+    regex: DEFAULT_API_KEY\s?=\s?['|"]?.*['|"]?
+  
   - name: Salesforce MarketingCloud Token
     regex: setAccessToken\(\w+\.MC_ACCESS_TOKEN\)
 

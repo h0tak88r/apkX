@@ -1,5 +1,4 @@
 version: "3.8"
-
 services:
   apkx-web:
     build:
@@ -9,21 +8,24 @@ services:
     ports:
       - "9090:9090"
     environment:
-      # Set the project root
       - APKX_ROOT=/app
-      # Set individual paths
       - APKX_UPLOAD_DIR=/app/web-data/uploads
       - APKX_REPORTS_DIR=/app/web-data/reports
       - APKX_DOWNLOAD_DIR=/app/web-data/downloads
       - APKX_PATTERNS_PATH=/app/config/regexes.yaml
-      # iOS download keychain passphrase
-      - IPATOOL_KEYCHAIN_PASSPHRASE=sallam@88
-      # Optional: Set a default Discord webhook
-      # - DISCORD_WEBHOOK=your_webhook_url_here
+      # Optional storage via GitLab
+      - USE_GITLAB_STORAGE=true
+      - GITLAB_PROJECT=your-namespace/your-repo
+      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      # iOS keychain passphrase (store as Dokploy secret)
+      - IPATOOL_KEYCHAIN_PASSPHRASE=${IPATOOL_KEYCHAIN_PASSPHRASE}
     volumes:
-      # Mount the entire project directory for source code and config
-      - .:/app
-    command: ["/usr/local/bin/apkx-web", "-addr", ":9090"]
+      - apkx_uploads:/app/web-data/uploads
+      - apkx_reports:/app/web-data/reports
+      - apkx_downloads:/app/web-data/downloads
+      # Provide your `config/regexes.yaml` from the repo or a Dokploy Config
+      - ./config:/app/config:ro
+    command: ["/usr/local/bin/apkx-web", "-addr", ":9090", "-mitm"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9090/"]
@@ -32,4 +34,7 @@ services:
       retries: 3
       start_period: 40s
 
-
+volumes:
+  apkx_uploads:
+  apkx_reports:
+  apkx_downloads:
