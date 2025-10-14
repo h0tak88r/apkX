@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   apkx-web:
     build:
@@ -15,7 +14,7 @@ services:
       - APKX_PATTERNS_PATH=/app/config/regexes.yaml
       # Optional storage via GitLab
       - USE_GITLAB_STORAGE=true
-      - GITLAB_PROJECT=your-namespace/your-repo
+      - GITLAB_PROJECT=${GITLAB_PROJECT}
       - GITLAB_TOKEN=${GITLAB_TOKEN}
       # iOS keychain passphrase (store as Dokploy secret)
       - IPATOOL_KEYCHAIN_PASSPHRASE=${IPATOOL_KEYCHAIN_PASSPHRASE}
