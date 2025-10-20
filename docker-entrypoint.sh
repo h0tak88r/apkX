@@ -14,19 +14,13 @@ fi
 
 echo "✅ ipatool found: $(ipatool --version)"
 
-# Check if we have Apple ID credentials for automated authentication
-if [ -n "$IPATOOL_EMAIL" ] && [ -n "$IPATOOL_PASSWORD" ]; then
-    echo "🔐 Apple ID credentials provided, checking authentication..."
-    
-    # Set default keychain passphrase if not provided
-    if [ -z "$IPATOOL_KEYCHAIN_PASSPHRASE" ]; then
-        export IPATOOL_KEYCHAIN_PASSPHRASE="sallam@88"
-    fi
-    
-    # Try to authenticate (this will be handled by the Go application)
-    echo "📱 ipatool authentication will be handled automatically by the application"
+# Check if we have Apple ID credentials for manual authentication
+if [ -n "$IPATOOL_EMAIL" ]; then
+    echo "📱 Apple ID email provided: $IPATOOL_EMAIL"
+    echo "   To authenticate ipatool manually, connect to the container and run:"
+    echo "   docker exec -it apkx-web ipatool auth login --email $IPATOOL_EMAIL"
 else
-    echo "⚠️  No Apple ID credentials provided (IPATOOL_EMAIL, IPATOOL_PASSWORD)"
+    echo "⚠️  No Apple ID email provided (IPATOOL_EMAIL)"
     echo "   iOS downloads will require manual authentication"
 fi
 

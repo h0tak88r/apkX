@@ -292,7 +292,7 @@ func (d *IPAToolDownloader) CleanupOldIPAs(olderThan time.Duration) error {
 	return nil
 }
 
-// ensureAuthenticated checks if ipatool is authenticated and attempts to authenticate if needed
+// ensureAuthenticated checks if ipatool is authenticated and provides manual instructions
 func (d *IPAToolDownloader) ensureAuthenticated() error {
 	// Check current authentication status
 	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
@@ -311,40 +311,6 @@ func (d *IPAToolDownloader) ensureAuthenticated() error {
 		return nil
 	}
 
-	// If not authenticated, try to authenticate using environment variables
-	return d.authenticateWithEnvVars(keychainPassphrase)
-}
-
-// authenticateWithEnvVars attempts to authenticate using environment variables
-func (d *IPAToolDownloader) authenticateWithEnvVars(keychainPassphrase string) error {
-	email := os.Getenv("IPATOOL_EMAIL")
-	password := os.Getenv("IPATOOL_PASSWORD")
-	code2FA := os.Getenv("IPATOOL_2FA_CODE")
-
-	if email == "" || password == "" {
-		return fmt.Errorf("ipatool authentication requires IPATOOL_EMAIL and IPATOOL_PASSWORD environment variables. Please set these in your .env file or Docker environment")
-	}
-
-	fmt.Printf("Attempting to authenticate with Apple ID: %s\n", email)
-
-	// Build authentication command
-	args := []string{"auth", "login", "--email", email, "--password", password}
-	
-	if code2FA != "" {
-		args = append(args, "--code", code2FA)
-	}
-	
-	args = append(args, "--keychain-passphrase", keychainPassphrase)
-	args = append(args, "--non-interactive")
-
-	// Execute authentication command
-	cmd := exec.Command("ipatool", args...)
-	output, err := cmd.CombinedOutput()
-	
-	if err != nil {
-		return fmt.Errorf("ipatool authentication failed: %v, output: %s", err, string(output))
-	}
-
-	fmt.Printf("Successfully authenticated with Apple ID\n")
-	return nil
+	// If not authenticated, provide manual instructions
+	return fmt.Errorf("ipatool needs to be authenticated manually. Please connect to the Docker container and run: 'ipatool auth login --email your-apple-id@example.com'")
 }

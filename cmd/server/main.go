@@ -1141,7 +1141,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
             <li>✅ Enhanced context extraction</li>
           </ul>
         </div>
-        <form action="/download-ios" method="post">
+        <form id="download-ios-form" onsubmit="handleIOSDownloadSubmit(event)">
           <div class="form-group">
             <label for="bundle_id">Bundle ID</label>
             <input type="text" name="bundle_id" id="bundle_id" placeholder="com.apple.mobilesafari" required>
@@ -1449,6 +1449,52 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       .catch(error => {
         console.error('Download error:', error);
         alert('❌ Download failed: ' + error.message + '\n\nPlease check your package name and try again.');
+      })
+      .finally(() => {
+        // Restore button state
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+      });
+    }
+    
+    // Handle iOS download form submission with AJAX
+    function handleIOSDownloadSubmit(event) {
+      event.preventDefault(); // Prevent default form submission
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      
+      // Show loading state
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = '⏳ Downloading iOS App...';
+      submitBtn.disabled = true;
+      
+      // Send AJAX request
+      fetch('/download-ios', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          throw new Error('iOS download failed');
+        }
+      })
+      .then(data => {
+        // Show success message
+        alert('✅ iOS download started successfully!\n\nJob ID: ' + data.job_id + '\nStatus: ' + data.status + '\nMessage: ' + data.message + '\n\nYou can track the progress in the "Active Jobs" section below.');
+        
+        // Refresh the jobs list to show the new job
+        loadJobs();
+        
+        // Reset form
+        form.reset();
+      })
+      .catch(error => {
+        console.error('iOS download error:', error);
+        alert('❌ iOS download failed: ' + error.message + '\n\nPlease check your bundle ID and try again.\n\nNote: Make sure ipatool is authenticated by connecting to the Docker container and running: ipatool auth login --email your-apple-id@example.com');
       })
       .finally(() => {
         // Restore button state
