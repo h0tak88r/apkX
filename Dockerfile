@@ -124,8 +124,10 @@ WORKDIR /app
 COPY --from=builder /app/apkx-web /usr/local/bin/apkx-web
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Copy config file as fallback (will be overridden by volume mount if available)
+COPY config/regexes.yaml /app/config/regexes.yaml
 # Ensure runtime data directories exist inside the image
-RUN mkdir -p /app/web-data/uploads /app/web-data/downloads /app/web-data/reports
+RUN mkdir -p /app/web-data/uploads /app/web-data/downloads /app/web-data/reports /app/config
 
 EXPOSE 9090
 

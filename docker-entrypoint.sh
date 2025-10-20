@@ -14,6 +14,14 @@ fi
 
 echo "✅ ipatool found: $(ipatool --version)"
 
+# Check if config file is available
+if [ -f "/app/config/regexes.yaml" ]; then
+    echo "✅ Config file found: /app/config/regexes.yaml"
+else
+    echo "⚠️  Config file not found: /app/config/regexes.yaml"
+    echo "   This may cause analysis failures"
+fi
+
 # Check if we have Apple ID credentials for manual authentication
 if [ -n "$IPATOOL_EMAIL" ]; then
     echo "📱 Apple ID email provided: $IPATOOL_EMAIL"
