@@ -2,6 +2,8 @@ package main
 
 import (
 	"archive/zip"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/h0tak88r/apkX/internal/analyzer"
 	"github.com/h0tak88r/apkX/internal/downloader"
 	"github.com/h0tak88r/apkX/internal/storage"
@@ -28,34 +32,53 @@ var (
 	downloadDir         string
 	patternsPathDefault string
 	
-	// Storage backend (GitLab or Local)
+	// Storage backend (R2 or Local)
 	storageBackend storage.StorageBackend
-	useGitLabStorage bool
+	useR2Storage bool
 	tempDir string // For temporary processing
+	
+	// Authentication
+	authEnabled        bool
+	authUsername       string
+	authPasswordHash   string
+	sessionSecret      string
+	sessionStore       map[string]*Session
+	sessionMutex       sync.RWMutex
 )
+
+// Session represents a user session
+type Session struct {
+	ID        string
+	Username  string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
 
 func init() {
 	root := detectProjectRoot()
 
-	// Check if GitLab storage should be used
-	useGitLabStorage = false
+	// Check if R2 storage should be used
+	useR2Storage = false
 	
-	if os.Getenv("USE_GITLAB_STORAGE") == "true" {
-		gitlabProject := os.Getenv("GITLAB_PROJECT")
-		gitlabToken := os.Getenv("GITLAB_TOKEN")
+	if os.Getenv("USE_R2_STORAGE") == "true" {
+		bucketName := os.Getenv("R2_BUCKET_NAME")
+		accountID := os.Getenv("R2_ACCOUNT_ID")
+		accessKeyID := os.Getenv("R2_ACCESS_KEY_ID")
+		secretKey := os.Getenv("R2_SECRET_KEY")
+		publicURL := os.Getenv("R2_PUBLIC_URL")
 		
-		if gitlabProject != "" && gitlabToken != "" {
-			log.Printf("🔄 Initializing GitLab storage backend (project: %s)", gitlabProject)
-			gitlab := storage.NewGitLabStorage(gitlabProject, gitlabToken)
+		if bucketName != "" && accountID != "" && accessKeyID != "" && secretKey != "" {
+			log.Printf("🔄 Initializing Cloudflare R2 storage backend (bucket: %s)", bucketName)
+			r2 := storage.NewCloudflareR2Storage(bucketName, accountID, accessKeyID, secretKey, publicURL)
 			
-			// Ensure storage branch exists
-			if err := gitlab.EnsureBranchExists(); err != nil {
-				log.Printf("⚠️  Warning: Failed to ensure GitLab branch exists: %v", err)
+			// Ensure bucket exists
+			if err := r2.EnsureBucketExists(); err != nil {
+				log.Printf("⚠️  Warning: Failed to ensure R2 bucket exists: %v", err)
 				log.Printf("⚠️  Falling back to local storage")
 			} else {
-				storageBackend = gitlab
-				useGitLabStorage = true
-				log.Printf("✅ GitLab storage active - files will be stored in GitLab")
+				storageBackend = r2
+				useR2Storage = true
+				log.Printf("✅ Cloudflare R2 storage active - files will be stored in R2")
 				
 				// Use temp directory for processing
 				tempDir = os.Getenv("APKX_TEMP_DIR")
@@ -67,12 +90,12 @@ func init() {
 				downloadDir = filepath.Join(tempDir, "downloads")
 			}
 		} else {
-			log.Printf("⚠️  GitLab storage enabled but credentials missing")
+			log.Printf("⚠️  R2 storage enabled but credentials missing")
 		}
 	}
 	
-	// Use local storage if GitLab not enabled or failed
-	if !useGitLabStorage {
+	// Use local storage if R2 is not enabled or failed
+	if !useR2Storage {
 		log.Printf("📁 Using local filesystem storage")
 		storageBackend = storage.NewLocalStorage(filepath.Join(root, "web-data"))
 		
@@ -100,6 +123,9 @@ func init() {
 	} else {
 		patternsPathDefault = filepath.Join(root, "config", "regexes.yaml")
 	}
+
+	// Initialize authentication
+	initAuthentication()
 }
 
 // Optional global Discord webhook to forward results (JSON + HTML)
@@ -107,6 +133,152 @@ var serverDefaultWebhook string
 
 // Global MITM patching flag
 var enableMITMPatch bool
+
+// initAuthentication initializes authentication settings
+func initAuthentication() {
+	// Check if authentication is enabled
+	authEnabled = os.Getenv("APKX_AUTH_ENABLED") == "true"
+	
+	if !authEnabled {
+		log.Printf("🔓 Authentication disabled - web interface is publicly accessible")
+		return
+	}
+	
+	// Get credentials from environment
+	authUsername = os.Getenv("APKX_AUTH_USERNAME")
+	authPassword := os.Getenv("APKX_AUTH_PASSWORD")
+	
+	if authUsername == "" || authPassword == "" {
+		log.Printf("⚠️  Authentication enabled but credentials not provided. Using defaults.")
+		authUsername = "admin"
+		authPassword = "admin123" // Default password - should be changed!
+	}
+	
+	// Hash the password
+	hash, err := bcrypt.GenerateFromPassword([]byte(authPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("Failed to hash password: %v", err)
+	}
+	authPasswordHash = string(hash)
+	
+	// Generate session secret
+	sessionSecret = os.Getenv("APKX_SESSION_SECRET")
+	if sessionSecret == "" {
+		// Generate a random session secret
+		bytes := make([]byte, 32)
+		if _, err := rand.Read(bytes); err != nil {
+			log.Fatalf("Failed to generate session secret: %v", err)
+		}
+		sessionSecret = hex.EncodeToString(bytes)
+		log.Printf("🔑 Generated session secret: %s", sessionSecret)
+	}
+	
+	// Initialize session store
+	sessionStore = make(map[string]*Session)
+	
+	log.Printf("🔒 Authentication enabled - username: %s", authUsername)
+}
+
+// generateSessionID creates a new session ID
+func generateSessionID() string {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Printf("Failed to generate session ID: %v", err)
+		return ""
+	}
+	return hex.EncodeToString(bytes)
+}
+
+// createSession creates a new session for the user
+func createSession(username string) *Session {
+	sessionID := generateSessionID()
+	if sessionID == "" {
+		return nil
+	}
+	
+	session := &Session{
+		ID:        sessionID,
+		Username:  username,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(24 * time.Hour), // 24 hour expiry
+	}
+	
+	sessionMutex.Lock()
+	sessionStore[sessionID] = session
+	sessionMutex.Unlock()
+	
+	return session
+}
+
+// getSession retrieves a session by ID
+func getSession(sessionID string) *Session {
+	sessionMutex.RLock()
+	defer sessionMutex.RUnlock()
+	
+	session, exists := sessionStore[sessionID]
+	if !exists {
+		return nil
+	}
+	
+	// Check if session has expired
+	if time.Now().After(session.ExpiresAt) {
+		sessionMutex.Unlock()
+		sessionMutex.Lock()
+		delete(sessionStore, sessionID)
+		sessionMutex.Unlock()
+		sessionMutex.RLock()
+		return nil
+	}
+	
+	return session
+}
+
+// deleteSession removes a session
+func deleteSession(sessionID string) {
+	sessionMutex.Lock()
+	defer sessionMutex.Unlock()
+	delete(sessionStore, sessionID)
+}
+
+// authenticateUser validates username and password
+func authenticateUser(username, password string) bool {
+	if username != authUsername {
+		return false
+	}
+	
+	err := bcrypt.CompareHashAndPassword([]byte(authPasswordHash), []byte(password))
+	return err == nil
+}
+
+// authMiddleware checks if the user is authenticated
+func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Skip authentication if disabled
+		if !authEnabled {
+			next(w, r)
+			return
+		}
+		
+		// Check for session cookie
+		cookie, err := r.Cookie("apkx_session")
+		if err != nil {
+			// No session cookie, redirect to login
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		
+		// Validate session
+		session := getSession(cookie.Value)
+		if session == nil {
+			// Invalid or expired session, redirect to login
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		
+		// User is authenticated, proceed
+		next(w, r)
+	}
+}
 
 // Job management
 type JobStatus string
@@ -251,28 +423,102 @@ func (jm *JobManager) DeleteJob(jobID string) bool {
 	return false
 }
 
+// handleLogin serves the login page and processes login requests
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	// If authentication is disabled, redirect to main page
+	if !authEnabled {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	
+	if r.Method == http.MethodPost {
+		// Process login
+		username := strings.TrimSpace(r.FormValue("username"))
+		password := strings.TrimSpace(r.FormValue("password"))
+		
+		if authenticateUser(username, password) {
+			// Create session
+			session := createSession(username)
+			if session != nil {
+				// Set session cookie
+				cookie := &http.Cookie{
+					Name:     "apkx_session",
+					Value:    session.ID,
+					Path:     "/",
+					HttpOnly: true,
+					Secure:   false, // Set to true in production with HTTPS
+					SameSite: http.SameSiteStrictMode,
+					Expires:  session.ExpiresAt,
+				}
+				http.SetCookie(w, cookie)
+				
+				log.Printf("✅ User %s logged in successfully", username)
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+		}
+		
+		// Login failed
+		log.Printf("❌ Failed login attempt for username: %s", username)
+		http.Redirect(w, r, "/login?error=1", http.StatusSeeOther)
+		return
+	}
+	
+	// Serve login page
+	loginTmpl.Execute(w, map[string]interface{}{
+		"Error": r.URL.Query().Get("error") == "1",
+	})
+}
+
+// handleLogout processes logout requests
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	// Get session cookie
+	cookie, err := r.Cookie("apkx_session")
+	if err == nil {
+		// Delete session
+		deleteSession(cookie.Value)
+	}
+	
+	// Clear cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "apkx_session",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+	
+	log.Printf("👋 User logged out")
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
 func main() {
 	log.Printf("apkX paths: uploadDir=%s, reportsRoot=%s, downloadDir=%s, patterns=%s", uploadDir, reportsRoot, downloadDir, patternsPathDefault)
 	must(os.MkdirAll(uploadDir, 0755))
 	must(os.MkdirAll(reportsRoot, 0755))
 	must(os.MkdirAll(downloadDir, 0755))
 
-	http.HandleFunc("/", handleIndex)
-	http.HandleFunc("/upload", handleUploadAsync)
-	http.HandleFunc("/download", handleDownloadAsync)
-	http.HandleFunc("/download-ios", handleDownloadIOSAsync)
-	http.HandleFunc("/api/jobs", handleJobsAPI)
-	http.HandleFunc("/api/job/", handleJobAPI)
-	http.HandleFunc("/api/job/delete/", handleDeleteJob)
-	http.HandleFunc("/api/report/delete/", handleDeleteReport)
-	http.HandleFunc("/api/install/", handleInstallAPK)
-	http.HandleFunc("/api/manifest/", handleDownloadManifest)
-	http.HandleFunc("/api/plist/", handleDownloadPlist)
-	http.HandleFunc("/api/capacity", handleCapacityCheck)
+	// Authentication routes (no middleware needed)
+	http.HandleFunc("/login", handleLogin)
+	http.HandleFunc("/logout", handleLogout)
+	
+	// Protected routes (with authentication middleware)
+	http.HandleFunc("/", authMiddleware(handleIndex))
+	http.HandleFunc("/upload", authMiddleware(handleUploadAsync))
+	http.HandleFunc("/download", authMiddleware(handleDownloadAsync))
+	http.HandleFunc("/download-ios", authMiddleware(handleDownloadIOSAsync))
+	http.HandleFunc("/api/jobs", authMiddleware(handleJobsAPI))
+	http.HandleFunc("/api/job/", authMiddleware(handleJobAPI))
+	http.HandleFunc("/api/job/delete/", authMiddleware(handleDeleteJob))
+	http.HandleFunc("/api/report/delete/", authMiddleware(handleDeleteReport))
+	http.HandleFunc("/api/install/", authMiddleware(handleInstallAPK))
+	http.HandleFunc("/api/manifest/", authMiddleware(handleDownloadManifest))
+	http.HandleFunc("/api/plist/", authMiddleware(handleDownloadPlist))
+	http.HandleFunc("/api/capacity", authMiddleware(handleCapacityCheck))
 
-	// Serve reports (from GitLab or local)
-	if useGitLabStorage {
-		http.HandleFunc("/reports/", handleReportsFromGitLab)
+	// Serve reports (from R2 or local)
+	if useR2Storage {
+		http.HandleFunc("/reports/", handleReportsFromR2)
 	} else {
 		fs := http.FileServer(http.Dir(reportsRoot))
 		http.Handle("/reports/", http.StripPrefix("/reports/", fs))
@@ -756,7 +1002,12 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 <body>
   <div class="header">
     <h1>🔍 apkX Web Portal v3.2.0</h1>
-    <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      {{if .AuthEnabled}}
+      <a href="/logout" class="btn-small" style="background: #dc3545; color: white; text-decoration: none;">🚪 Logout</a>
+      {{end}}
+      <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+    </div>
   </div>
   
   <div class="container">
@@ -807,7 +1058,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       
       <!-- Download Tab -->
       <div id="download-tab" class="tab-content">
-        <form action="/download" method="post">
+        <form id="download-form" onsubmit="handleDownloadSubmit(event)">
           <div class="form-group">
             <label for="package">Package Name</label>
             <input type="text" name="package" id="package" placeholder="com.instagram.android" required>
@@ -1160,6 +1411,52 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       }
     }
     
+    // Handle download form submission with AJAX
+    function handleDownloadSubmit(event) {
+      event.preventDefault(); // Prevent default form submission
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      
+      // Show loading state
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.textContent = '⏳ Downloading...';
+      submitBtn.disabled = true;
+      
+      // Send AJAX request
+      fetch('/download', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        } else {
+          throw new Error('Download failed');
+        }
+      })
+      .then(data => {
+        // Show success message
+        alert('✅ Download started successfully!\n\nJob ID: ' + data.job_id + '\nStatus: ' + data.status + '\nMessage: ' + data.message + '\n\nYou can track the progress in the "Active Jobs" section below.');
+        
+        // Refresh the jobs list to show the new job
+        loadJobs();
+        
+        // Reset form
+        form.reset();
+      })
+      .catch(error => {
+        console.error('Download error:', error);
+        alert('❌ Download failed: ' + error.message + '\n\nPlease check your package name and try again.');
+      })
+      .finally(() => {
+        // Restore button state
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+      });
+    }
+    
     function deleteReport(reportId) {
       if (confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
         fetch('/api/report/delete/' + reportId, {
@@ -1213,6 +1510,242 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
 </body>
 </html>`))
 
+var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>apkX Login</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #2d2d2d;
+      --bg-tertiary: #3a3a3a;
+      --text-primary: #ffffff;
+      --text-secondary: #b0b0b0;
+      --text-muted: #808080;
+      --accent-primary: #00d4ff;
+      --accent-secondary: #0099cc;
+      --border-color: #404040;
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      --error-color: #dc3545;
+    }
+    
+    [data-theme="light"] {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8f9fa;
+      --bg-tertiary: #e9ecef;
+      --text-primary: #212529;
+      --text-secondary: #6c757d;
+      --text-muted: #adb5bd;
+      --accent-primary: #007bff;
+      --accent-secondary: #0056b3;
+      --border-color: #dee2e6;
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    
+    .login-container {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      width: 100%;
+      max-width: 400px;
+    }
+    
+    .login-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .login-header h1 {
+      color: var(--accent-primary);
+      font-size: 2em;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    
+    .login-header p {
+      color: var(--text-secondary);
+      font-size: 0.9em;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    
+    .form-group input[type="text"],
+    .form-group input[type="password"] {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+    
+    .form-group input[type="text"]:focus,
+    .form-group input[type="password"]:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+    }
+    
+    .form-group input[type="text"]::placeholder,
+    .form-group input[type="password"]::placeholder {
+      color: var(--text-muted);
+    }
+    
+    .btn {
+      background: var(--accent-primary);
+      color: var(--bg-primary);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+      transition: all 0.3s ease;
+      width: 100%;
+    }
+    
+    .btn:hover {
+      background: var(--accent-secondary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .error-message {
+      background: rgba(220, 53, 69, 0.1);
+      border: 1px solid var(--error-color);
+      color: var(--error-color);
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+      text-align: center;
+    }
+    
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: var(--accent-primary);
+      color: var(--bg-primary);
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+    
+    .theme-toggle:hover {
+      background: var(--accent-secondary);
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+  
+  <div class="login-container">
+    <div class="login-header">
+      <h1>🔍 apkX</h1>
+      <p>Advanced APK & iOS Analysis Tool</p>
+    </div>
+    
+    {{if .Error}}
+    <div class="error-message">
+      ❌ Invalid username or password. Please try again.
+    </div>
+    {{end}}
+    
+    <form method="post">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" name="username" id="username" placeholder="Enter your username" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" name="password" id="password" placeholder="Enter your password" required>
+      </div>
+      
+      <button class="btn" type="submit">🔐 Login</button>
+    </form>
+  </div>
+  
+  <script>
+    // Theme management
+    function toggleTheme() {
+      const body = document.body;
+      const themeToggle = document.querySelector('.theme-toggle');
+      const currentTheme = body.getAttribute('data-theme');
+      
+      if (currentTheme === 'light') {
+        body.setAttribute('data-theme', 'light');
+        themeToggle.textContent = '🌙 Dark Mode';
+        localStorage.setItem('theme', 'dark');
+      } else {
+        body.setAttribute('data-theme', 'light');
+        themeToggle.textContent = '☀️ Light Mode';
+        localStorage.setItem('theme', 'light');
+      }
+    }
+    
+    // Load saved theme
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      const body = document.body;
+      const themeToggle = document.querySelector('.theme-toggle');
+      
+      body.setAttribute('data-theme', savedTheme);
+      themeToggle.textContent = savedTheme === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode';
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      loadTheme();
+      
+      // Focus on username field
+      document.getElementById('username').focus();
+    });
+  </script>
+</body>
+</html>`))
+
 type reportRow struct {
 	ID   string
 	APK  string
@@ -1226,6 +1759,7 @@ type indexData struct {
 	Rows               []reportRow
 	DefaultWebhookHint string
 	EnableMITMPatch    bool
+	AuthEnabled        bool
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -1234,7 +1768,12 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := listReports()
-	data := indexData{Rows: rows, DefaultWebhookHint: "configured", EnableMITMPatch: enableMITMPatch}
+	data := indexData{
+		Rows:               rows, 
+		DefaultWebhookHint: "configured", 
+		EnableMITMPatch:    enableMITMPatch,
+		AuthEnabled:        authEnabled,
+	}
 	if err := indexTmpl.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -1546,9 +2085,9 @@ func processDownloadJob(job *Job, r *http.Request) {
 	jobManager.UpdateJobStatus(job.ID, JobCompleted, "Analysis completed successfully")
 	log.Printf("Job %s: Analysis completed successfully", job.ID)
 	
-	// Upload reports to GitLab if enabled
-	if useGitLabStorage {
-		go uploadReportToGitLab(outDir, runID)
+	// Upload reports to R2 if enabled
+	if useR2Storage {
+		go uploadReportToR2(outDir, runID)
 		// Cleanup temp download file
 		go func() {
 			time.Sleep(5 * time.Second)
@@ -1818,9 +2357,9 @@ func findDownloadedAPK(packageName string) (string, error) {
 }
 
 func listReports() []reportRow {
-	// If using GitLab storage, list from GitLab
-	if useGitLabStorage {
-		return listReportsFromGitLab()
+	// If using R2 storage, list from R2
+	if useR2Storage {
+		return listReportsFromR2()
 	}
 	
 	// Otherwise list from local filesystem
@@ -2042,9 +2581,9 @@ func processUploadJob(job *Job, filePath string, r *http.Request) {
 	jobManager.UpdateJobStatus(job.ID, JobCompleted, "Analysis completed successfully")
 	log.Printf("Job %s: Analysis completed successfully", job.ID)
 	
-	// Upload reports to GitLab if enabled
-	if useGitLabStorage {
-		go uploadReportToGitLab(outDir, runID)
+	// Upload reports to R2 if enabled
+	if useR2Storage {
+		go uploadReportToR2(outDir, runID)
 		// Cleanup temp upload file
 		go func() {
 			time.Sleep(5 * time.Second)
@@ -2116,9 +2655,9 @@ func processIOSUploadJob(job *Job, ipaPath string, r *http.Request) {
 	jobManager.UpdateJobStatus(job.ID, JobCompleted, "iOS analysis completed successfully")
 	log.Printf("Job %s: iOS analysis completed successfully", job.ID)
 	
-	// Upload reports to GitLab if enabled
-	if useGitLabStorage {
-		go uploadReportToGitLab(outDir, runID)
+	// Upload reports to R2 if enabled
+	if useR2Storage {
+		go uploadReportToR2(outDir, runID)
 		// Cleanup temp upload file
 		go func() {
 			time.Sleep(5 * time.Second)
@@ -2136,7 +2675,7 @@ func saveUploadedFile(file multipart.File, header *multipart.FileHeader) (string
 
 	safeFilename := safeName(header.Filename)
 	
-	if useGitLabStorage {
+	if useR2Storage {
 		// Save to temp directory for processing
 		dst := filepath.Join(uploadDir, safeFilename)
 		os.MkdirAll(filepath.Dir(dst), 0755)
@@ -2146,17 +2685,17 @@ func saveUploadedFile(file multipart.File, header *multipart.FileHeader) (string
 			return "", err
 		}
 		
-		// Save to temp file and GitLab simultaneously
+		// Save to temp file and R2 simultaneously
 		tee := io.TeeReader(file, out)
 		
-		// Upload to GitLab (with web-data prefix)
+		// Upload to R2 (with web-data prefix)
 		storagePath := "web-data/uploads/" + safeFilename
 		if err := storageBackend.SaveFile(storagePath, tee); err != nil {
 			out.Close()
-			log.Printf("⚠️  Warning: Failed to upload to GitLab: %v", err)
+			log.Printf("⚠️  Warning: Failed to upload to R2: %v", err)
 			// Continue anyway, file is in temp
 		} else {
-			log.Printf("✅ Uploaded to GitLab: %s", storagePath)
+			log.Printf("✅ Uploaded to R2: %s", storagePath)
 		}
 		
 		out.Close()
@@ -2323,14 +2862,14 @@ func handleDeleteReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if useGitLabStorage {
-		// Delete from GitLab storage
-		if err := deleteReportFromGitLab(reportID); err != nil {
-			log.Printf("Failed to delete report %s from GitLab: %v", reportID, err)
-			http.Error(w, "failed to delete report from GitLab", http.StatusInternalServerError)
+	if useR2Storage {
+		// Delete from R2 storage
+		if err := deleteReportFromR2(reportID); err != nil {
+			log.Printf("Failed to delete report %s from R2: %v", reportID, err)
+			http.Error(w, "failed to delete report from R2", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Report %s deleted from GitLab successfully", reportID)
+		log.Printf("Report %s deleted from R2 successfully", reportID)
 	} else {
 		// Delete from local storage
 		reportDir := filepath.Join(reportsRoot, reportID)
@@ -2351,41 +2890,6 @@ func handleDeleteReport(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
 
-// deleteReportFromGitLab deletes a report and its associated files from GitLab storage
-func deleteReportFromGitLab(reportID string) error {
-	// List all files in the report directory
-	reportPath := fmt.Sprintf("web-data/reports/%s", reportID)
-	files, err := storageBackend.ListFiles(reportPath)
-	if err != nil {
-		return fmt.Errorf("failed to list report files: %v", err)
-	}
-
-	// Delete all report files
-	for _, file := range files {
-		filePath := fmt.Sprintf("web-data/reports/%s/%s", reportID, file.Name)
-		if err := storageBackend.DeleteFile(filePath); err != nil {
-			log.Printf("⚠️  Failed to delete file %s: %v", filePath, err)
-		}
-	}
-
-	// Also delete any associated patched APK files
-	// Look for patched APKs that might be associated with this report
-	downloadFiles, err := storageBackend.ListFiles("web-data/downloads")
-	if err == nil {
-		for _, file := range downloadFiles {
-			// Check if this patched APK belongs to this report
-			// (This is a simple heuristic - in practice, you might want to store this mapping)
-			if strings.Contains(file.Name, reportID) || strings.Contains(file.Name, "mitm-patched") {
-				filePath := fmt.Sprintf("web-data/downloads/%s", file.Name)
-				if err := storageBackend.DeleteFile(filePath); err != nil {
-					log.Printf("⚠️  Failed to delete patched APK %s: %v", filePath, err)
-				}
-			}
-		}
-	}
-
-	return nil
-}
 
 func handleInstallAPK(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -2402,8 +2906,8 @@ func handleInstallAPK(w http.ResponseWriter, r *http.Request) {
 	var metaContent []byte
 	var err error
 	
-	// Read metadata from GitLab or local
-	if useGitLabStorage {
+	// Read metadata from R2 or local
+	if useR2Storage {
 		metaPath := fmt.Sprintf("web-data/reports/%s/apk.name", reportID)
 		reader, err := storageBackend.ReadFile(metaPath)
 		if err != nil {
@@ -2448,16 +2952,16 @@ func handleInstallAPK(w http.ResponseWriter, r *http.Request) {
 		storagePath = "web-data/uploads/" + fileName
 	}
 
-	// Serve file from GitLab or local
-	if useGitLabStorage {
-		// Try to read from GitLab
+	// Serve file from R2 or local
+	if useR2Storage {
+		// Try to read from R2
 		reader, err := storageBackend.ReadFile(storagePath)
 		if err != nil {
 			// Try alternate location
 			altPath := strings.Replace(storagePath, "uploads", "downloads", 1)
 			reader, err = storageBackend.ReadFile(altPath)
 			if err != nil {
-				log.Printf("APK not found in GitLab: %s or %s", storagePath, altPath)
+				log.Printf("APK not found in R2: %s or %s", storagePath, altPath)
 				http.Error(w, "APK file not found in storage", http.StatusNotFound)
 				return
 			}
@@ -2472,7 +2976,7 @@ func handleInstallAPK(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.Copy(w, reader); err != nil {
 			log.Printf("Failed to stream APK: %v", err)
 		} else {
-			log.Printf("✅ APK %s downloaded from GitLab", fileName)
+			log.Printf("✅ APK %s downloaded from R2", fileName)
 		}
 	} else {
 		// Local filesystem
@@ -2582,13 +3086,13 @@ func handleDownloadManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try to read AndroidManifest.xml from GitLab or local
-	if useGitLabStorage {
-		// Try GitLab storage
+	// Try to read AndroidManifest.xml from R2 or local
+	if useR2Storage {
+		// Try R2 storage
 		manifestPath := fmt.Sprintf("web-data/reports/%s/AndroidManifest.xml", reportID)
 		reader, err := storageBackend.ReadFile(manifestPath)
 		if err != nil {
-			log.Printf("Manifest not found in GitLab: %s", manifestPath)
+			log.Printf("Manifest not found in R2: %s", manifestPath)
 			http.Error(w, "AndroidManifest.xml not found", http.StatusNotFound)
 			return
 		}
@@ -2600,7 +3104,7 @@ func handleDownloadManifest(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.Copy(w, reader); err != nil {
 			log.Printf("Failed to stream manifest: %v", err)
 		} else {
-			log.Printf("✅ Manifest downloaded from GitLab for report %s", reportID)
+			log.Printf("✅ Manifest downloaded from R2 for report %s", reportID)
 		}
 		return
 	}
@@ -2920,8 +3424,8 @@ func looksLikeRoot(dir string) bool {
 	return false
 }
 
-// handleReportsFromGitLab serves report files from GitLab storage
-func handleReportsFromGitLab(w http.ResponseWriter, r *http.Request) {
+// handleReportsFromR2 serves report files from R2 storage
+func handleReportsFromR2(w http.ResponseWriter, r *http.Request) {
 	// Extract path (e.g., "/reports/20251004-001512/security-report.html")
 	path := strings.TrimPrefix(r.URL.Path, "/reports/")
 	if path == "" || path == "/" {
@@ -2929,15 +3433,15 @@ func handleReportsFromGitLab(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// Build GitLab storage path (with web-data prefix)
+	// Build cloud storage path (with web-data prefix)
 	storagePath := "web-data/reports/" + path
 	
-	log.Printf("📥 Serving report from GitLab: %s", storagePath)
+	log.Printf("📥 Serving report from R2: %s", storagePath)
 	
-	// Read file from GitLab
+	// Read file from R2 storage
 	reader, err := storageBackend.ReadFile(storagePath)
 	if err != nil {
-		log.Printf("⚠️  Failed to read %s from GitLab: %v", storagePath, err)
+		log.Printf("⚠️  Failed to read %s from R2: %v", storagePath, err)
 		http.Error(w, "report not found", http.StatusNotFound)
 		return
 	}
@@ -3061,6 +3565,219 @@ func fileExistsInGitLab(path string) bool {
 		return false
 	}
 	return exists
+}
+
+// uploadReportToR2 uploads all report files to R2 storage
+func uploadReportToR2(reportDir, reportID string) {
+	log.Printf("📤 Uploading report %s to R2...", reportID)
+	uploaded := 0
+	failed := 0
+	
+	// Upload report files
+	filepath.Walk(reportDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		
+		// Get relative path from report dir
+		relPath, err := filepath.Rel(reportDir, path)
+		if err != nil {
+			return nil
+		}
+		
+		// Create cloud storage path (with web-data prefix)
+		storagePath := fmt.Sprintf("web-data/reports/%s/%s", reportID, relPath)
+		
+		// Read and upload file
+		f, err := os.Open(path)
+		if err != nil {
+			log.Printf("⚠️  Failed to open %s: %v", path, err)
+			failed++
+			return nil
+		}
+		defer f.Close()
+		
+		if err := storageBackend.SaveFile(storagePath, f); err != nil {
+			log.Printf("⚠️  Failed to upload %s: %v", storagePath, err)
+			failed++
+		} else {
+			uploaded++
+		}
+		
+		return nil
+	})
+	
+	// Also upload patched APK files if they exist
+	patchedAPKs, err := filepath.Glob(filepath.Join(downloadDir, "*mitm-patched*"))
+	if err == nil && len(patchedAPKs) > 0 {
+		for _, patchedAPK := range patchedAPKs {
+			fileName := filepath.Base(patchedAPK)
+			storagePath := fmt.Sprintf("web-data/downloads/%s", fileName)
+			
+			f, err := os.Open(patchedAPK)
+			if err != nil {
+				log.Printf("⚠️  Failed to open patched APK %s: %v", patchedAPK, err)
+				failed++
+				continue
+			}
+			
+			if err := storageBackend.SaveFile(storagePath, f); err != nil {
+				log.Printf("⚠️  Failed to upload patched APK %s: %v", storagePath, err)
+				failed++
+			} else {
+				uploaded++
+				log.Printf("📤 Uploaded patched APK: %s", fileName)
+			}
+			f.Close()
+		}
+	}
+	
+	log.Printf("✅ Report uploaded to R2: %d files uploaded, %d failed", uploaded, failed)
+	
+	// Cleanup temp report directory after successful upload
+	if failed == 0 {
+		go func() {
+			time.Sleep(10 * time.Second)
+			os.RemoveAll(reportDir)
+			log.Printf("🗑️  Cleaned up temp report: %s", reportDir)
+		}()
+	}
+}
+
+// listReportsFromR2 lists all reports from R2 storage
+func listReportsFromR2() []reportRow {
+	log.Printf("📥 Fetching reports list from R2...")
+	
+	// List files in reports directory (using web-data prefix)
+	files, err := storageBackend.ListFiles("web-data/reports")
+	if err != nil {
+		// If directory doesn't exist yet, that's OK - no reports
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not Found") {
+			log.Printf("📁 No reports directory found in R2 yet - this is normal for new installations")
+			return nil
+		}
+		log.Printf("⚠️  Failed to list reports from R2: %v", err)
+		return nil
+	}
+	
+	// Group files by report ID (directory name)
+	reportMap := make(map[string]bool)
+	for _, file := range files {
+		// Extract report ID from path (e.g., "web-data/reports/20251004-001512/results.json" -> "20251004-001512")
+		parts := strings.Split(file.Path, "/")
+		if len(parts) >= 3 {
+			reportID := parts[2]
+			reportMap[reportID] = true
+		}
+	}
+	
+	// Create rows for each report
+	var rows []reportRow
+	for reportID := range reportMap {
+		// Try to read metadata file
+		metaPath := fmt.Sprintf("web-data/reports/%s/apk.name", reportID)
+		metaReader, err := storageBackend.ReadFile(metaPath)
+		
+		var apkName string
+		var fileType string
+		
+		if err == nil {
+			metaBytes, _ := io.ReadAll(metaReader)
+			metaReader.Close()
+			metaContent := string(metaBytes)
+			
+			// Try to parse as JSON
+			var metaData map[string]string
+			if err := json.Unmarshal(metaBytes, &metaData); err == nil {
+				apkName = metaData["original_apk"]
+				if apkName == "" {
+					apkName = metaData["original_ipa"]
+				}
+			} else {
+				apkName = strings.TrimSpace(metaContent)
+			}
+		} else {
+			apkName = "Unknown"
+		}
+		
+		// Determine file type
+		if strings.HasSuffix(strings.ToLower(apkName), ".apk") {
+			fileType = "APK"
+		} else if strings.HasSuffix(strings.ToLower(apkName), ".xapk") {
+			fileType = "XAPK"
+		} else if strings.HasSuffix(strings.ToLower(apkName), ".ipa") {
+			fileType = "IPA"
+		} else {
+			fileType = "Unknown"
+		}
+		
+		// Check if report files exist
+		hasJSON := fileExistsInR2(fmt.Sprintf("web-data/reports/%s/results.json", reportID))
+		hasHTML := fileExistsInR2(fmt.Sprintf("web-data/reports/%s/security-report.html", reportID))
+		
+		row := reportRow{
+			ID:   reportID,
+			APK:  apkName,
+			Type: fileType,
+			When: reportID, // Use ID as timestamp since we don't have ModTime from R2 easily
+			JSON: hasJSON,
+			HTML: hasHTML,
+		}
+		rows = append(rows, row)
+	}
+	
+	// Sort by ID (newest first)
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+	
+	log.Printf("✅ Found %d reports in R2", len(rows))
+	return rows
+}
+
+// fileExistsInR2 checks if a file exists in R2 storage
+func fileExistsInR2(path string) bool {
+	exists, err := storageBackend.FileExists(path)
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
+// deleteReportFromR2 deletes a report and its associated files from R2 storage
+func deleteReportFromR2(reportID string) error {
+	// List all files in the report directory
+	reportPath := fmt.Sprintf("web-data/reports/%s", reportID)
+	files, err := storageBackend.ListFiles(reportPath)
+	if err != nil {
+		return fmt.Errorf("failed to list report files: %v", err)
+	}
+
+	// Delete all report files
+	for _, file := range files {
+		filePath := fmt.Sprintf("web-data/reports/%s/%s", reportID, file.Name)
+		if err := storageBackend.DeleteFile(filePath); err != nil {
+			log.Printf("⚠️  Failed to delete file %s: %v", filePath, err)
+		}
+	}
+
+	// Also delete any associated patched APK files
+	// Look for patched APKs that might be associated with this report
+	downloadFiles, err := storageBackend.ListFiles("web-data/downloads")
+	if err == nil {
+		for _, file := range downloadFiles {
+			// Check if this patched APK belongs to this report
+			// (This is a simple heuristic - in practice, you might want to store this mapping)
+			if strings.Contains(file.Name, reportID) || strings.Contains(file.Name, "mitm-patched") {
+				filePath := fmt.Sprintf("web-data/downloads/%s", file.Name)
+				if err := storageBackend.DeleteFile(filePath); err != nil {
+					log.Printf("⚠️  Failed to delete patched APK %s: %v", filePath, err)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // uploadReportToGitLab uploads all report files to GitLab storage

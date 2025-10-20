@@ -4,7 +4,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
+
+// FileInfo represents file metadata
+type FileInfo struct {
+	Name         string
+	Path         string
+	Size         int64
+	LastModified time.Time
+}
 
 // StorageBackend defines the interface for file storage operations
 type StorageBackend interface {

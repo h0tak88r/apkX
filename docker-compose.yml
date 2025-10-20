@@ -12,12 +12,20 @@ services:
       - APKX_REPORTS_DIR=/app/web-data/reports
       - APKX_DOWNLOAD_DIR=/app/web-data/downloads
       - APKX_PATTERNS_PATH=/app/config/regexes.yaml
-      # Optional storage via GitLab
-      - USE_GITLAB_STORAGE=true
-      - GITLAB_PROJECT=${GITLAB_PROJECT}
-      - GITLAB_TOKEN=${GITLAB_TOKEN}
+      # Optional storage via Cloudflare R2
+      - USE_R2_STORAGE=${USE_R2_STORAGE:-false}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_KEY=${R2_SECRET_KEY}
+      - R2_PUBLIC_URL=${R2_PUBLIC_URL}
       # iOS keychain passphrase (store as Dokploy secret)
       - IPATOOL_KEYCHAIN_PASSPHRASE=${IPATOOL_KEYCHAIN_PASSPHRASE}
+      # Authentication settings
+      - APKX_AUTH_ENABLED=${APKX_AUTH_ENABLED:-false}
+      - APKX_AUTH_USERNAME=${APKX_AUTH_USERNAME:-admin}
+      - APKX_AUTH_PASSWORD=${APKX_AUTH_PASSWORD:-admin123}
+      - APKX_SESSION_SECRET=${APKX_SESSION_SECRET}
     volumes:
       - apkx_uploads:/app/web-data/uploads
       - apkx_reports:/app/web-data/reports

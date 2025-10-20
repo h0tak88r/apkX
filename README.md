@@ -3,15 +3,15 @@
 ![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)
 ![Version](https://img.shields.io/badge/version-v3.3.3-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-supported-blue.svg)
-![GitLab](https://img.shields.io/badge/gitlab-integration-green.svg)
+![R2](https://img.shields.io/badge/cloudflare-r2-orange.svg)
 
 A comprehensive security analysis tool for Android APK and iOS IPA files with advanced pattern matching, vulnerability detection, and cloud storage integration.
 
 ## 🚀 What's New in v3.3.3
 
-- **✅ GitLab Storage Integration**: Zero-local storage mode with full GitLab backend
+- **✅ Cloudflare R2 Storage Integration**: Zero-local storage mode with full R2 backend
 - **✅ Patched APK Support**: MITM-patched APKs are now properly uploaded and downloadable
-- **✅ Delete Reports**: Full CRUD operations for reports in both local and GitLab storage
+- **✅ Delete Reports**: Full CRUD operations for reports in both local and R2 storage
 - **✅ Enhanced UI**: Modern responsive design with sidebar navigation
 - **✅ iOS Analysis**: Comprehensive iOS app analysis with binary plist support
 - **✅ Docker Support**: Complete Docker containerization with all dependencies
@@ -31,7 +31,7 @@ A comprehensive security analysis tool for Android APK and iOS IPA files with ad
 
 ### ☁️ **Storage Options**
 - **Local Storage**: Traditional file-based storage
-- **GitLab Storage**: Cloud-based storage with zero local dependencies
+- **Cloudflare R2 Storage**: Cloud-based storage with zero local dependencies
 - **Auto-Sync**: Automatic synchronization between storage backends
 
 ### 🎨 **Modern UI**
@@ -47,9 +47,9 @@ A comprehensive security analysis tool for Android APK and iOS IPA files with ad
 curl -fsSL https://raw.githubusercontent.com/h0tak88r/apkX/main/apkx.sh | bash -s up
 ```
 
-### Option 2: GitLab Storage Mode
+### Option 2: Cloudflare R2 Storage Mode
 ```bash
-curl -fsSL https://raw.githubusercontent.com/h0tak88r/apkX/main/apkx.sh | bash -s up:gitlab
+curl -fsSL https://raw.githubusercontent.com/h0tak88r/apkX/main/apkx.sh | bash -s up:r2
 ```
 
 ### Option 3: Manual Docker Setup
@@ -105,21 +105,53 @@ This is a one-time setup that stores your credentials securely in the container'
 
 ### Environment Variables
 ```bash
-# GitLab Storage (Optional)
-export USE_GITLAB_STORAGE=true
-export GITLAB_PROJECT="your-username/your-repo"
-export GITLAB_TOKEN="your-access-token"
+# R2 Storage (Optional)
+export USE_R2_STORAGE=true
+export R2_BUCKET_NAME="your-bucket-name"
+export R2_ACCOUNT_ID="your-account-id"
+export R2_ACCESS_KEY_ID="your-access-key-id"
+export R2_SECRET_KEY="your-secret-key"
+export R2_PUBLIC_URL="https://your-custom-domain.com"
 
 # Local Storage
 export APKX_UPLOAD_DIR="/path/to/uploads"
 export APKX_REPORTS_DIR="/path/to/reports"
 export APKX_DOWNLOAD_DIR="/path/to/downloads"
+
+# Authentication (Optional)
+export APKX_AUTH_ENABLED=true
+export APKX_AUTH_USERNAME="your-username"
+export APKX_AUTH_PASSWORD="your-secure-password"
+export APKX_SESSION_SECRET="your-session-secret"
 ```
 
-### GitLab Setup
-1. Create a GitLab repository
-2. Generate a Project Access Token with `api` and `write_repository` scopes
+### Cloudflare R2 Setup
+1. Create a Cloudflare R2 bucket
+2. Generate R2 API tokens with read/write permissions
 3. Set environment variables or use the setup script
+
+**Required Environment Variables:**
+```bash
+export USE_R2_STORAGE=true
+export R2_BUCKET_NAME="your-bucket-name"
+export R2_ACCOUNT_ID="your-account-id"
+export R2_ACCESS_KEY_ID="your-access-key-id"
+export R2_SECRET_KEY="your-secret-key"
+export R2_PUBLIC_URL="https://your-custom-domain.com"  # Optional
+```
+
+### Authentication Setup
+By default, authentication is **disabled** and the web interface is publicly accessible. To enable authentication:
+
+1. **Enable Authentication**: Set `APKX_AUTH_ENABLED=true`
+2. **Set Credentials**: Configure `APKX_AUTH_USERNAME` and `APKX_AUTH_PASSWORD`
+3. **Session Security**: Optionally set `APKX_SESSION_SECRET` for session security
+
+**Default Credentials** (when authentication is enabled but credentials not provided):
+- Username: `admin`
+- Password: `admin123`
+
+⚠️ **Important**: Change the default password in production environments!
 
 ## 🐳 Docker Support
 
@@ -132,8 +164,8 @@ export APKX_DOWNLOAD_DIR="/path/to/downloads"
 # Start with local storage
 ./apkx.sh up
 
-# Start with GitLab storage
-./apkx.sh up:gitlab
+# Start with R2 storage
+./apkx.sh up:r2
 
 # Check dependencies
 ./apkx.sh deps
@@ -174,7 +206,7 @@ export APKX_DOWNLOAD_DIR="/path/to/downloads"
 - **Vulnerability Scanning**: Built-in security checks
 - **MITM Support**: APK patching for network analysis
 - **Report Encryption**: Secure report generation
-- **Access Control**: Token-based authentication
+- **Access Control**: Simple HTTP authentication with session management
 
 ## 📁 Project Structure
 
