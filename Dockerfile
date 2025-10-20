@@ -122,10 +122,13 @@ WORKDIR /app
 
 # App files
 COPY --from=builder /app/apkx-web /usr/local/bin/apkx-web
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Ensure runtime data directories exist inside the image
 RUN mkdir -p /app/web-data/uploads /app/web-data/downloads /app/web-data/reports
 
 EXPOSE 9090
 
-# Default command: start server with MITM enabled; override at runtime if desired
-CMD ["/usr/local/bin/apkx-web", "-addr", ":9090", "-mitm"]
+# Default command: use entrypoint script
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["-addr", ":9090", "-mitm"]

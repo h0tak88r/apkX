@@ -118,6 +118,12 @@ export APKX_UPLOAD_DIR="/path/to/uploads"
 export APKX_REPORTS_DIR="/path/to/reports"
 export APKX_DOWNLOAD_DIR="/path/to/downloads"
 
+# iOS Authentication (Optional)
+export IPATOOL_KEYCHAIN_PASSPHRASE="your-keychain-passphrase"
+export IPATOOL_EMAIL="your-apple-id@example.com"
+export IPATOOL_PASSWORD="your-apple-id-password"
+export IPATOOL_2FA_CODE="your-2fa-code"
+
 # Authentication (Optional)
 export APKX_AUTH_ENABLED=true
 export APKX_AUTH_USERNAME="your-username"
@@ -139,6 +145,19 @@ export R2_ACCESS_KEY_ID="your-access-key-id"
 export R2_SECRET_KEY="your-secret-key"
 export R2_PUBLIC_URL="https://your-custom-domain.com"  # Optional
 ```
+
+### iOS Downloads Setup (Optional)
+For automated iOS app downloads, configure Apple ID credentials:
+
+**Required Environment Variables:**
+```bash
+export IPATOOL_KEYCHAIN_PASSPHRASE="your-keychain-passphrase"
+export IPATOOL_EMAIL="your-apple-id@example.com"
+export IPATOOL_PASSWORD="your-apple-id-password"
+export IPATOOL_2FA_CODE="your-2fa-code"  # Optional, if 2FA is enabled
+```
+
+**Note**: iOS downloads require a valid Apple ID with purchased apps. The authentication is handled automatically in Docker containers.
 
 ### Authentication Setup
 By default, authentication is **disabled** and the web interface is publicly accessible. To enable authentication:

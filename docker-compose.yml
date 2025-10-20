@@ -21,6 +21,10 @@ services:
       - R2_PUBLIC_URL=${R2_PUBLIC_URL}
       # iOS keychain passphrase (store as Dokploy secret)
       - IPATOOL_KEYCHAIN_PASSPHRASE=${IPATOOL_KEYCHAIN_PASSPHRASE}
+      # iOS authentication (optional - for automated downloads)
+      - IPATOOL_EMAIL=${IPATOOL_EMAIL}
+      - IPATOOL_PASSWORD=${IPATOOL_PASSWORD}
+      - IPATOOL_2FA_CODE=${IPATOOL_2FA_CODE}
       # Authentication settings
       - APKX_AUTH_ENABLED=${APKX_AUTH_ENABLED:-false}
       - APKX_AUTH_USERNAME=${APKX_AUTH_USERNAME:-admin}
@@ -32,7 +36,8 @@ services:
       - apkx_downloads:/app/web-data/downloads
       # Provide your `config/regexes.yaml` from the repo or a Dokploy Config
       - ./config:/app/config:ro
-    command: ["/usr/local/bin/apkx-web", "-addr", ":9090", "-mitm"]
+      # Persist ipatool authentication data
+      - ipatool_config:/root/.ipatool
     restart: unless-stopped
     # Only add this if you want to use Traefik
     labels:
@@ -53,3 +58,4 @@ volumes:
   apkx_uploads:
   apkx_reports:
   apkx_downloads:
+  ipatool_config:
