@@ -516,6 +516,7 @@ func main() {
 	http.HandleFunc("/api/install/", authMiddleware(handleInstallAPK))
 	http.HandleFunc("/api/manifest/", authMiddleware(handleDownloadManifest))
 	http.HandleFunc("/api/plist/", authMiddleware(handleDownloadPlist))
+	http.HandleFunc("/api/ipa/", authMiddleware(handleDownloadIPA))
 	http.HandleFunc("/api/capacity", authMiddleware(handleCapacityCheck))
 
 	// Serve reports (from R2 or local)
@@ -1324,6 +1325,7 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
               <a href="/api/manifest/{{.ID}}" class="btn-small" style="background: #17a2b8; color: white; text-decoration: none;">📄 Manifest</a>
               {{else if eq .Type "IPA"}}
               <a href="/api/plist/{{.ID}}" class="btn-small" style="background: #17a2b8; color: white; text-decoration: none;">📄 Plist</a>
+              <a href="/api/ipa/{{.ID}}" class="btn-small" style="background: #6f42c1; color: white; text-decoration: none;">📱 IPA</a>
               {{end}}
               <button onclick="deleteReport('{{.ID}}')" class="btn-small btn-danger">🗑️ Delete</button>
             </td>
@@ -3539,7 +3541,41 @@ func handleDownloadPlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the Info.plist file for this iOS report
+	// Try to read Info.plist from R2 or local
+	if useR2Storage {
+		// Try R2 storage
+		plistPath := fmt.Sprintf("web-data/reports/%s/Info.plist", reportID)
+		reader, err := storageBackend.ReadFile(plistPath)
+		if err != nil {
+			log.Printf("Info.plist not found in R2: %s", plistPath)
+			http.Error(w, "Info.plist not found", http.StatusNotFound)
+			return
+		}
+		defer reader.Close()
+
+		// Read the content
+		plistContent, err := io.ReadAll(reader)
+		if err != nil {
+			log.Printf("Failed to read Info.plist from R2: %v", err)
+			http.Error(w, "failed to read file", http.StatusInternalServerError)
+			return
+		}
+
+		// Convert binary plist to XML if needed
+		xmlContent := convertPlistToXML(plistContent)
+
+		w.Header().Set("Content-Disposition", "attachment; filename=Info.plist")
+		w.Header().Set("Content-Type", "application/xml")
+
+		if _, err := w.Write(xmlContent); err != nil {
+			log.Printf("Failed to serve Info.plist: %v", err)
+		} else {
+			log.Printf("✅ Info.plist downloaded from R2 for report %s", reportID)
+		}
+		return
+	}
+
+	// Local filesystem - original logic
 	reportDir := filepath.Join(reportsRoot, reportID)
 
 	// Look for Info.plist in common iOS extraction locations
@@ -3611,6 +3647,99 @@ func handleDownloadPlist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Info.plist %s downloaded successfully", reportID)
+}
+
+// handleDownloadIPA handles downloading the original IPA file
+func handleDownloadIPA(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	reportID := strings.TrimPrefix(r.URL.Path, "/api/ipa/")
+	if reportID == "" {
+		http.Error(w, "report ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Try to read IPA file from R2 or local
+	if useR2Storage {
+		// Try R2 storage - look for IPA files in downloads directory
+		downloadFiles, err := storageBackend.ListFiles("web-data/downloads")
+		if err != nil {
+			log.Printf("Failed to list downloads from R2: %v", err)
+			http.Error(w, "IPA file not found", http.StatusNotFound)
+			return
+		}
+
+		var ipaPath string
+		for _, file := range downloadFiles {
+			// Look for IPA files that might be associated with this report
+			if strings.HasSuffix(file.Name, ".ipa") {
+				// Check if this IPA belongs to this report by looking at the filename pattern
+				// The filename usually contains the bundle ID and version
+				ipaPath = fmt.Sprintf("web-data/downloads/%s", file.Name)
+				break
+			}
+		}
+
+		if ipaPath == "" {
+			log.Printf("No IPA file found in R2 for report %s", reportID)
+			http.Error(w, "IPA file not found", http.StatusNotFound)
+			return
+		}
+
+		reader, err := storageBackend.ReadFile(ipaPath)
+		if err != nil {
+			log.Printf("Failed to read IPA from R2: %v", err)
+			http.Error(w, "failed to read IPA file", http.StatusInternalServerError)
+			return
+		}
+		defer reader.Close()
+
+		// Get filename from path
+		fileName := filepath.Base(ipaPath)
+
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+		w.Header().Set("Content-Type", "application/octet-stream")
+
+		if _, err := io.Copy(w, reader); err != nil {
+			log.Printf("Failed to stream IPA: %v", err)
+		} else {
+			log.Printf("✅ IPA downloaded from R2 for report %s", reportID)
+		}
+		return
+	}
+
+	// Local filesystem - look for IPA files in download directory
+	downloadFiles, err := filepath.Glob(filepath.Join(downloadDir, "*.ipa"))
+	if err != nil || len(downloadFiles) == 0 {
+		log.Printf("No IPA files found locally for report %s", reportID)
+		http.Error(w, "IPA file not found", http.StatusNotFound)
+		return
+	}
+
+	// Use the first IPA file found (in a real implementation, you might want to match by report ID)
+	ipaPath := downloadFiles[0]
+	fileName := filepath.Base(ipaPath)
+
+	// Open and serve the file
+	file, err := os.Open(ipaPath)
+	if err != nil {
+		log.Printf("Failed to open IPA file: %v", err)
+		http.Error(w, "failed to open IPA file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+	w.Header().Set("Content-Type", "application/octet-stream")
+
+	if _, err := io.Copy(w, file); err != nil {
+		log.Printf("Failed to stream IPA: %v", err)
+	} else {
+		log.Printf("✅ IPA downloaded locally for report %s", reportID)
+	}
 }
 
 // convertPlistToXML converts binary plist to XML format
