@@ -3673,13 +3673,17 @@ func handleDownloadIPA(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var ipaPath string
+		var latestTime time.Time
+		
 		for _, file := range downloadFiles {
 			// Look for IPA files that might be associated with this report
 			if strings.HasSuffix(file.Name, ".ipa") {
-				// Check if this IPA belongs to this report by looking at the filename pattern
-				// The filename usually contains the bundle ID and version
-				ipaPath = fmt.Sprintf("web-data/downloads/%s", file.Name)
-				break
+				// For now, we'll use the most recent IPA file
+				// In a more sophisticated implementation, we could match by filename patterns
+				if file.LastModified.After(latestTime) {
+					latestTime = file.LastModified
+					ipaPath = fmt.Sprintf("web-data/downloads/%s", file.Name)
+				}
 			}
 		}
 
@@ -3706,7 +3710,7 @@ func handleDownloadIPA(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.Copy(w, reader); err != nil {
 			log.Printf("Failed to stream IPA: %v", err)
 		} else {
-			log.Printf("✅ IPA downloaded from R2 for report %s", reportID)
+			log.Printf("✅ IPA downloaded from R2 for report %s: %s", reportID, fileName)
 		}
 		return
 	}
@@ -4130,6 +4134,31 @@ func uploadReportToR2(reportDir, reportID string) {
 			} else {
 				uploaded++
 				log.Printf("📤 Uploaded patched APK: %s", fileName)
+			}
+			f.Close()
+		}
+	}
+
+	// Also upload IPA files if they exist
+	ipaFiles, err := filepath.Glob(filepath.Join(downloadDir, "*.ipa"))
+	if err == nil && len(ipaFiles) > 0 {
+		for _, ipaFile := range ipaFiles {
+			fileName := filepath.Base(ipaFile)
+			storagePath := fmt.Sprintf("web-data/downloads/%s", fileName)
+			
+			f, err := os.Open(ipaFile)
+			if err != nil {
+				log.Printf("⚠️  Failed to open IPA %s: %v", ipaFile, err)
+				failed++
+				continue
+			}
+			
+			if err := storageBackend.SaveFile(storagePath, f); err != nil {
+				log.Printf("⚠️  Failed to upload IPA %s: %v", storagePath, err)
+				failed++
+			} else {
+				uploaded++
+				log.Printf("📤 Uploaded IPA: %s", fileName)
 			}
 			f.Close()
 		}
