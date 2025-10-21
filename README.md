@@ -1,20 +1,20 @@
 # apkX - Advanced APK & iOS Analysis Tool
 
 ![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)
-![Version](https://img.shields.io/badge/version-v3.3.3-blue.svg)
+![Version](https://img.shields.io/badge/version-v4.0.0-blue.svg)
 ![Docker](https://img.shields.io/badge/docker-supported-blue.svg)
 ![R2](https://img.shields.io/badge/cloudflare-r2-orange.svg)
 
 A comprehensive security analysis tool for Android APK and iOS IPA files with advanced pattern matching, vulnerability detection, and cloud storage integration.
 
-## 🚀 What's New in v3.3.3
+## 🚀 What's New in v4.0.0
 
-- **✅ Cloudflare R2 Storage Integration**: Zero-local storage mode with full R2 backend
-- **✅ Patched APK Support**: MITM-patched APKs are now properly uploaded and downloadable
-- **✅ Delete Reports**: Full CRUD operations for reports in both local and R2 storage
-- **✅ Enhanced UI**: Modern responsive design with sidebar navigation
-- **✅ iOS Analysis**: Comprehensive iOS app analysis with binary plist support
-- **✅ Docker Support**: Complete Docker containerization with all dependencies
+- **✅ Enhanced Installation Script**: Automatic dependency checking and installation
+- **✅ Configurable Docker Setup**: All paths and ports now configurable via environment variables
+- **✅ Cross-Platform Support**: Improved installation on Linux, macOS, and Windows
+- **✅ Security Improvements**: Environment variable usage instead of hardcoded credentials
+- **✅ Better Error Handling**: Enhanced user feedback and error messages
+- **✅ Dependency Management**: Automatic installation of required system packages
 
 ## ✨ Features
 
@@ -40,23 +40,53 @@ A comprehensive security analysis tool for Android APK and iOS IPA files with ad
 - **Interactive Reports**: Rich HTML reports with navigation
 - **Download Support**: Direct download of patched APKs and manifests
 
-## 🚀 Quick Start
+## 🚀 Installation & Quick Start
 
-### Option 1: One-Line Installation (Recommended)
-```bash
-curl -fsSL https://raw.githubusercontent.com/h0tak88r/apkX/main/apkx.sh | bash -s up
-```
+### Option 1: Docker (Recommended)
+The easiest way to run apkX is with Docker, which includes all dependencies:
 
-### Option 2: Cloudflare R2 Storage Mode
 ```bash
-curl -fsSL https://raw.githubusercontent.com/h0tak88r/apkX/main/apkx.sh | bash -s up:r2
-```
-
-### Option 3: Manual Docker Setup
-```bash
+# Clone the repository
 git clone https://github.com/h0tak88r/apkX.git
 cd apkX
-docker-compose up -d
+
+# Set your Apple ID credentials (for iOS downloads)
+export IPATOOL_EMAIL="your-email@example.com"
+export IPATOOL_PASSWORD="your-app-specific-password"
+export IPATOOL_KEYCHAIN_PASSPHRASE="your-passphrase"
+
+# Start with Docker Compose
+docker-compose up --build
+```
+
+**Access the web interface at:** `http://localhost:9090`
+
+### Option 2: Local Installation
+For local installation, you need the following tools installed:
+
+#### Required Tools
+- **Go 1.21+** - [Install Go](https://golang.org/dl/)
+- **Java 17+** - [Install Java](https://openjdk.org/)
+- **Node.js 18+** - [Install Node.js](https://nodejs.org/)
+- **apkeep** - [Install apkeep](https://github.com/EFForg/apkeep)
+- **ipatool** - [Install ipatool](https://github.com/majd/ipatool)
+- **apk-mitm** - [Install apk-mitm](https://github.com/shroudedcode/apk-mitm)
+
+#### Build and Run
+```bash
+# Clone and build
+git clone https://github.com/h0tak88r/apkX.git
+cd apkX
+go mod download
+go build -o apkx-web ./cmd/server/main.go
+
+# Set environment variables
+export IPATOOL_EMAIL="your-email@example.com"
+export IPATOOL_PASSWORD="your-app-specific-password"
+export IPATOOL_KEYCHAIN_PASSPHRASE="your-passphrase"
+
+# Run the server
+./apkx-web -addr :9090 -mitm
 ```
 
 ## 📖 Usage
@@ -104,27 +134,35 @@ This is a one-time setup that stores your credentials securely in the container'
 ## 🔧 Configuration
 
 ### Environment Variables
+
+#### Required for iOS Downloads
 ```bash
-# R2 Storage (Optional)
-export USE_R2_STORAGE=true
+export IPATOOL_EMAIL="your-apple-id@example.com"
+export IPATOOL_PASSWORD="your-app-specific-password"
+export IPATOOL_KEYCHAIN_PASSPHRASE="your-keychain-passphrase"
+```
+
+#### Optional Configuration
+```bash
+# Server Configuration
+export PORT="9090"                    # Web server port (default: 9090)
+
+# Storage Paths (Docker)
+export APKX_UPLOAD_DIR="/app/web-data/uploads"
+export APKX_REPORTS_DIR="/app/web-data/reports"
+export APKX_DOWNLOAD_DIR="/app/web-data/downloads"
+export APKX_PATTERNS_PATH="/app/config/regexes.yaml"
+
+# Cloudflare R2 Storage (Optional)
+export USE_R2_STORAGE="true"
 export R2_BUCKET_NAME="your-bucket-name"
 export R2_ACCOUNT_ID="your-account-id"
 export R2_ACCESS_KEY_ID="your-access-key-id"
 export R2_SECRET_KEY="your-secret-key"
 export R2_PUBLIC_URL="https://your-custom-domain.com"
 
-# Local Storage
-export APKX_UPLOAD_DIR="/path/to/uploads"
-export APKX_REPORTS_DIR="/path/to/reports"
-export APKX_DOWNLOAD_DIR="/path/to/downloads"
-
-# iOS Authentication (for automatic authentication)
-export IPATOOL_KEYCHAIN_PASSPHRASE="your-keychain-passphrase"
-export IPATOOL_EMAIL="your-apple-id@example.com"
-export IPATOOL_PASSWORD="your-app-specific-password"
-
 # Authentication (Optional)
-export APKX_AUTH_ENABLED=true
+export APKX_AUTH_ENABLED="true"
 export APKX_AUTH_USERNAME="your-username"
 export APKX_AUTH_PASSWORD="your-secure-password"
 export APKX_SESSION_SECRET="your-session-secret"
@@ -177,29 +215,64 @@ By default, authentication is **disabled** and the web interface is publicly acc
 
 ⚠️ **Important**: Change the default password in production environments!
 
-## 🐳 Docker Support
+## 🐳 Docker Commands
 
-### Prerequisites
-- Docker 20.10+
-- Docker Compose 2.0+
-
-### Available Commands
 ```bash
-# Start with local storage
-./apkx.sh up
+# Start the application
+docker-compose up --build
 
-# Start with R2 storage
-./apkx.sh up:r2
-
-# Check dependencies
-./apkx.sh deps
+# Start in background
+docker-compose up -d --build
 
 # View logs
-./apkx.sh logs
+docker-compose logs -f
 
-# Stop services
-./apkx.sh down
+# Stop the application
+docker-compose down
+
+# Rebuild and start
+docker-compose up --build --force-recreate
 ```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Missing Dependencies
+If you get "command not found" errors, install the missing tools:
+- **apkeep**: [Installation Guide](https://github.com/EFForg/apkeep#installation)
+- **ipatool**: [Installation Guide](https://github.com/majd/ipatool#installation)
+- **Java**: [Installation Guide](https://openjdk.org/install/)
+- **Node.js**: [Installation Guide](https://nodejs.org/en/download/)
+
+#### iOS Download Authentication
+```bash
+# Authenticate ipatool manually
+ipatool auth login --email your-email@example.com
+
+# Or set environment variables
+export IPATOOL_EMAIL="your-email@example.com"
+export IPATOOL_PASSWORD="your-app-specific-password"
+export IPATOOL_KEYCHAIN_PASSPHRASE="your-passphrase"
+```
+
+#### Docker Issues
+```bash
+# Check if config file is mounted
+docker exec -it apkx-web ls -la /app/config/
+
+# Recreate volumes
+docker-compose down -v
+docker-compose up --build
+
+# Check logs
+docker-compose logs -f
+```
+
+### Getting Help
+- Check the logs: `docker-compose logs -f`
+- Verify dependencies: `docker exec -it apkx-web which apkeep ipatool jadx`
+- Test iOS auth: `docker exec -it apkx-web ipatool auth login`
 
 ## 📊 Analysis Features
 

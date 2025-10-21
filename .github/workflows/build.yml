@@ -81,6 +81,8 @@ jobs:
             dist/*.zip
             dist/*.tar
           generate_release_notes: true
-          body_path: RELEASE_NOTES_v3.3.0.md
+          body_path: RELEASE_NOTES_v4.0.0.md
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
