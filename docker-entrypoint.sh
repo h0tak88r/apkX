@@ -60,4 +60,19 @@ echo ""
 echo "🌐 Starting apkX web server on port ${PORT:-9090}..."
 
 # Start the web server with all arguments passed through
-exec /usr/local/bin/apkx-web "$@"
+# Replace the default port with the PORT environment variable if set
+if [ -n "$PORT" ] && [ "$PORT" != "9090" ]; then
+    # Replace -addr :9090 with -addr :$PORT in the arguments
+    args=()
+    for arg in "$@"; do
+        if [[ "$arg" == "-addr" ]]; then
+            args+=("-addr")
+            args+=(":$PORT")
+        elif [[ "$arg" != ":9090" ]]; then
+            args+=("$arg")
+        fi
+    done
+    exec /usr/local/bin/apkx-web "${args[@]}"
+else
+    exec /usr/local/bin/apkx-web "$@"
+fi

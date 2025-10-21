@@ -129,7 +129,7 @@ COPY config/regexes.yaml /app/config/regexes.yaml
 # Ensure runtime data directories exist inside the image
 RUN mkdir -p /app/web-data/uploads /app/web-data/downloads /app/web-data/reports /app/config
 
-EXPOSE 9090
+EXPOSE ${PORT:-9090}
 
 # Default command: use entrypoint script
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
