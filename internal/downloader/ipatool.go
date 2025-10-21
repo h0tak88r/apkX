@@ -52,7 +52,7 @@ func (d *IPAToolDownloader) DownloadApp(bundleID, version string) (string, error
 		return "", fmt.Errorf("failed to create output directory: %v", err)
 	}
 
-	// Build ipatool command
+	// Build ipatool command with correct syntax
 	args := []string{"download"}
 
 	// Add bundle ID using the correct flag
@@ -66,10 +66,8 @@ func (d *IPAToolDownloader) DownloadApp(bundleID, version string) (string, error
 	// Add output directory
 	args = append(args, "--output", d.OutputDir)
 
-	// Add additional options for better compatibility
-	args = append(args, "--format", "text")
+	// Add purchase flag to obtain license if needed
 	args = append(args, "--purchase")
-	args = append(args, "--non-interactive")
 
 	// Add keychain passphrase - use environment variable or default
 	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
@@ -79,6 +77,7 @@ func (d *IPAToolDownloader) DownloadApp(bundleID, version string) (string, error
 	}
 	
 	args = append(args, "--keychain-passphrase", keychainPassphrase)
+	args = append(args, "--non-interactive")
 
 	fmt.Printf("Downloading iOS app: %s (version: %s)\n", bundleID, version)
 	fmt.Printf("Command: ipatool %s\n", strings.Join(args, " "))
@@ -110,12 +109,11 @@ func (d *IPAToolDownloader) SearchApp(query string, limit int) ([]IPAToolApp, er
 		return nil, fmt.Errorf("ipatool not found in PATH: %v", err)
 	}
 
-	// Build search command
+	// Build search command with correct syntax
 	args := []string{"search", query}
 	if limit > 0 {
 		args = append(args, "--limit", fmt.Sprintf("%d", limit))
 	}
-	args = append(args, "--format", "json")
 	
 	// Add keychain passphrase for authentication
 	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
@@ -148,8 +146,8 @@ func (d *IPAToolDownloader) GetAppInfo(bundleID string) (*IPAToolApp, error) {
 		return nil, fmt.Errorf("ipatool not found in PATH: %v", err)
 	}
 
-	// Build info command
-	args := []string{"info", bundleID, "--format", "json"}
+	// Build info command with correct syntax
+	args := []string{"info", bundleID}
 	
 	// Add keychain passphrase for authentication
 	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
