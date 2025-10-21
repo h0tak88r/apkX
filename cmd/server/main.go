@@ -2246,6 +2246,17 @@ func processIOSDownloadJob(job *Job, r *http.Request) {
 		return
 	}
 
+	// Upload reports to R2 if enabled
+	if useR2Storage {
+		go uploadReportToR2(outDir, runID)
+		// Cleanup temp download file
+		go func() {
+			time.Sleep(5 * time.Second)
+			os.Remove(ipaPath)
+			log.Printf("🗑️  Cleaned up temp IPA file: %s", ipaPath)
+		}()
+	}
+
 	// Job completed successfully
 	jobManager.SetJobReportID(job.ID, runID)
 	jobManager.UpdateJobStatus(job.ID, JobCompleted, "iOS analysis completed successfully")

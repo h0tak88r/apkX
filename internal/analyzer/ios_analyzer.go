@@ -102,10 +102,17 @@ func (a *IOSAnalyzer) AnalyzeIPA(ipaPath string) error {
 	}
 
 	// Analyze binary
-	binaryInfo, err := a.analyzeBinary(extractDir)
+	var binaryInfo *IOSBinaryInfo
+	appBundlePath, err := a.findAppBundle(extractDir)
 	if err != nil {
-		fmt.Printf("Warning: Binary analysis failed: %v\n", err)
+		fmt.Printf("Warning: failed to find app bundle: %v\n", err)
 		binaryInfo = &IOSBinaryInfo{}
+	} else {
+		binaryInfo, err = a.analyzeBinary(appBundlePath)
+		if err != nil {
+			fmt.Printf("Warning: Binary analysis failed: %v\n", err)
+			binaryInfo = &IOSBinaryInfo{}
+		}
 	}
 
 	// Perform static analysis
