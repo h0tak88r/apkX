@@ -9,12 +9,12 @@ A comprehensive security analysis tool for Android APK and iOS IPA files with ad
 
 ## 🚀 What's New in v4.0.0
 
-- **✅ Enhanced Installation Script**: Automatic dependency checking and installation
+- **✅ Cloudflare R2 Integration**: Full support for cloud storage with zero local dependencies
+- **✅ Dokploy Compatibility**: Enhanced Docker configuration for easy deployment on Dokploy
+- **✅ iOS Download Improvements**: Fixed ipatool issues and enhanced iOS app scanning
 - **✅ Configurable Docker Setup**: All paths and ports now configurable via environment variables
-- **✅ Cross-Platform Support**: Improved installation on Linux, macOS, and Windows
 - **✅ Security Improvements**: Environment variable usage instead of hardcoded credentials
-- **✅ Better Error Handling**: Enhanced user feedback and error messages
-- **✅ Dependency Management**: Automatic installation of required system packages
+- **✅ Simplified Documentation**: Clean README with clear tool list and official links
 
 ## ✨ Features
 
