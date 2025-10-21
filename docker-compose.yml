@@ -21,8 +21,9 @@ services:
       - R2_PUBLIC_URL=${R2_PUBLIC_URL}
       # iOS keychain passphrase (store as Dokploy secret)
       - IPATOOL_KEYCHAIN_PASSPHRASE=${IPATOOL_KEYCHAIN_PASSPHRASE}
-      # iOS authentication (optional - for manual authentication)
+      # iOS authentication (for automatic authentication)
       - IPATOOL_EMAIL=${IPATOOL_EMAIL}
+      - IPATOOL_PASSWORD=${IPATOOL_PASSWORD}
       # Authentication settings
       - APKX_AUTH_ENABLED=${APKX_AUTH_ENABLED:-false}
       - APKX_AUTH_USERNAME=${APKX_AUTH_USERNAME:-admin}

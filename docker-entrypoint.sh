@@ -22,13 +22,17 @@ else
     echo "   This may cause analysis failures"
 fi
 
-# Check if we have Apple ID credentials for manual authentication
-if [ -n "$IPATOOL_EMAIL" ]; then
+# Check if we have Apple ID credentials for automatic authentication
+if [ -n "$IPATOOL_EMAIL" ] && [ -n "$IPATOOL_PASSWORD" ]; then
+    echo "🔐 Apple ID credentials provided for automatic authentication"
+    echo "   Email: $IPATOOL_EMAIL"
+    echo "   Authentication will be handled automatically by the application"
+elif [ -n "$IPATOOL_EMAIL" ]; then
     echo "📱 Apple ID email provided: $IPATOOL_EMAIL"
     echo "   To authenticate ipatool manually, connect to the container and run:"
     echo "   docker exec -it apkx-web ipatool auth login --email $IPATOOL_EMAIL"
 else
-    echo "⚠️  No Apple ID email provided (IPATOOL_EMAIL)"
+    echo "⚠️  No Apple ID credentials provided (IPATOOL_EMAIL, IPATOOL_PASSWORD)"
     echo "   iOS downloads will require manual authentication"
 fi
 

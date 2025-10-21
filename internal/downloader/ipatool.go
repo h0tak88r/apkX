@@ -69,6 +69,7 @@ func (d *IPAToolDownloader) DownloadApp(bundleID, version string) (string, error
 	// Add additional options for better compatibility
 	args = append(args, "--format", "text")
 	args = append(args, "--purchase")
+	args = append(args, "--non-interactive")
 
 	// Add keychain passphrase - use environment variable or default
 	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
@@ -78,16 +79,19 @@ func (d *IPAToolDownloader) DownloadApp(bundleID, version string) (string, error
 	}
 	
 	args = append(args, "--keychain-passphrase", keychainPassphrase)
-	args = append(args, "--non-interactive")
 
 	fmt.Printf("Downloading iOS app: %s (version: %s)\n", bundleID, version)
+	fmt.Printf("Command: ipatool %s\n", strings.Join(args, " "))
 
 	// Execute ipatool command
 	cmd := exec.Command("ipatool", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		fmt.Printf("ipatool command failed with output: %s\n", string(output))
 		return "", fmt.Errorf("ipatool download failed: %v, output: %s", err, string(output))
 	}
+
+	fmt.Printf("ipatool output: %s\n", string(output))
 
 	// Find the downloaded IPA file
 	ipaPath, err := d.findDownloadedIPA(bundleID)
@@ -292,7 +296,7 @@ func (d *IPAToolDownloader) CleanupOldIPAs(olderThan time.Duration) error {
 	return nil
 }
 
-// ensureAuthenticated checks if ipatool is authenticated and provides manual instructions
+// ensureAuthenticated checks if ipatool is authenticated and attempts to authenticate if needed
 func (d *IPAToolDownloader) ensureAuthenticated() error {
 	// Check current authentication status
 	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
@@ -311,6 +315,34 @@ func (d *IPAToolDownloader) ensureAuthenticated() error {
 		return nil
 	}
 
-	// If not authenticated, provide manual instructions
-	return fmt.Errorf("ipatool needs to be authenticated manually. Please connect to the Docker container and run: 'ipatool auth login --email your-apple-id@example.com'")
+	// If not authenticated, try to authenticate using environment variables
+	return d.authenticateWithEnvVars(keychainPassphrase)
+}
+
+// authenticateWithEnvVars attempts to authenticate using environment variables
+func (d *IPAToolDownloader) authenticateWithEnvVars(keychainPassphrase string) error {
+	email := os.Getenv("IPATOOL_EMAIL")
+	password := os.Getenv("IPATOOL_PASSWORD")
+
+	if email == "" || password == "" {
+		return fmt.Errorf("ipatool authentication requires IPATOOL_EMAIL and IPATOOL_PASSWORD environment variables. Please set these in your .env file or Docker environment")
+	}
+
+	fmt.Printf("Attempting to authenticate with Apple ID: %s\n", email)
+
+	// Build authentication command
+	args := []string{"auth", "login", "--email", email, "--password", password}
+	args = append(args, "--keychain-passphrase", keychainPassphrase)
+	args = append(args, "--non-interactive")
+
+	// Execute authentication command
+	cmd := exec.Command("ipatool", args...)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		return fmt.Errorf("ipatool authentication failed: %v, output: %s", err, string(output))
+	}
+
+	fmt.Printf("Successfully authenticated with Apple ID\n")
+	return nil
 }

@@ -118,9 +118,10 @@ export APKX_UPLOAD_DIR="/path/to/uploads"
 export APKX_REPORTS_DIR="/path/to/reports"
 export APKX_DOWNLOAD_DIR="/path/to/downloads"
 
-# iOS Authentication (Optional - for manual authentication)
+# iOS Authentication (for automatic authentication)
 export IPATOOL_KEYCHAIN_PASSPHRASE="your-keychain-passphrase"
 export IPATOOL_EMAIL="your-apple-id@example.com"
+export IPATOOL_PASSWORD="your-app-specific-password"
 
 # Authentication (Optional)
 export APKX_AUTH_ENABLED=true
@@ -144,22 +145,24 @@ export R2_SECRET_KEY="your-secret-key"
 export R2_PUBLIC_URL="https://your-custom-domain.com"  # Optional
 ```
 
-### iOS Downloads Setup (Optional)
-For iOS app downloads, configure Apple ID credentials and authenticate manually:
+### iOS Downloads Setup (Automatic Authentication)
+For automatic iOS app downloads, configure Apple ID credentials with an App-Specific Password:
 
 **Required Environment Variables:**
 ```bash
 export IPATOOL_KEYCHAIN_PASSPHRASE="your-keychain-passphrase"
 export IPATOOL_EMAIL="your-apple-id@example.com"
+export IPATOOL_PASSWORD="your-app-specific-password"
 ```
 
-**Manual Authentication:**
-1. Start the Docker container
-2. Connect to the container: `docker exec -it apkx-web bash`
-3. Authenticate ipatool: `ipatool auth login --email your-apple-id@example.com`
-4. Follow the interactive prompts for password and 2FA
+**App-Specific Password Setup:**
+1. Go to [Apple ID Account Settings](https://appleid.apple.com/)
+2. Sign in with your Apple ID
+3. In the "Security" section, click "Generate Password" under "App-Specific Passwords"
+4. Enter a label (e.g., "apkX iOS Downloads")
+5. Copy the generated password and use it as `IPATOOL_PASSWORD`
 
-**Note**: iOS downloads require a valid Apple ID with purchased apps. Authentication must be done manually for security reasons.
+**Note**: iOS downloads require a valid Apple ID with purchased apps. Authentication is handled automatically using the App-Specific Password.
 
 ### Authentication Setup
 By default, authentication is **disabled** and the web interface is publicly accessible. To enable authentication:
