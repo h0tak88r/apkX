@@ -507,6 +507,8 @@ func main() {
 	http.HandleFunc("/upload", authMiddleware(handleUploadAsync))
 	http.HandleFunc("/download", authMiddleware(handleDownloadAsync))
 	http.HandleFunc("/download-ios", authMiddleware(handleDownloadIOSAsync))
+	http.HandleFunc("/api/ios/auth-status", authMiddleware(handleIOSAuthStatus))
+	http.HandleFunc("/api/ios/auth", authMiddleware(handleIOSAuth))
 	http.HandleFunc("/api/jobs", authMiddleware(handleJobsAPI))
 	http.HandleFunc("/api/job/", authMiddleware(handleJobAPI))
 	http.HandleFunc("/api/job/delete/", authMiddleware(handleDeleteJob))
@@ -997,6 +999,74 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
     .mitm-section.hidden {
       display: none;
     }
+    
+    /* Modal Styles */
+    .modal {
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal-content {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 20px;
+      width: 90%;
+      max-width: 500px;
+      position: relative;
+      box-shadow: var(--shadow);
+    }
+    
+    .close {
+      position: absolute;
+      right: 15px;
+      top: 15px;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      color: var(--text-secondary);
+    }
+    
+    .close:hover {
+      color: var(--text-primary);
+    }
+    
+    .alert {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+    
+    .alert.success {
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+    
+    .alert.error {
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+    
+    .btn-secondary {
+      background-color: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+    
+    .btn-secondary:hover {
+      background-color: var(--border-color);
+    }
   </style>
 </head>
 <body>
@@ -1130,6 +1200,15 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       
       <!-- iOS Download Tab -->
       <div id="download-ios-tab" class="tab-content">
+        <!-- iOS Authentication Status -->
+        <div id="ios-auth-status" class="info-box">
+          <h3>🔐 iOS Authentication Status</h3>
+          <div id="auth-status-content">
+            <p>Checking authentication status...</p>
+          </div>
+          <button id="auth-btn" class="btn" onclick="showAuthModal()" style="display: none;">🔑 Authenticate with Apple ID</button>
+        </div>
+        
         <div class="info-box">
           <h3>🍎 Enhanced iOS Analysis</h3>
           <p>Now with <strong>regex-based pattern matching</strong> and <strong>concurrent processing</strong> for faster, more accurate analysis!</p>
@@ -1174,6 +1253,37 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
           
           <button class="btn" type="submit">🍎 Download & Analyze iOS App</button>
         </form>
+        
+        <!-- iOS Authentication Modal -->
+        <div id="ios-auth-modal" class="modal" style="display: none;">
+          <div class="modal-content">
+            <span class="close" onclick="hideAuthModal()">&times;</span>
+            <h2>🔑 Authenticate with Apple ID</h2>
+            <form id="ios-auth-form" onsubmit="handleIOSAuthSubmit(event)">
+              <div class="form-group">
+                <label for="auth_email">Apple ID Email</label>
+                <input type="email" id="auth_email" name="email" placeholder="your-apple-id@example.com" required>
+              </div>
+              
+              <div class="form-group">
+                <label for="auth_password">App-Specific Password</label>
+                <input type="password" id="auth_password" name="password" placeholder="sqcr-fsqg-pimd-wspe" required>
+                <div class="small-text">Use your App-Specific Password, not your regular Apple ID password</div>
+              </div>
+              
+              <div class="form-group" id="auth-code-group" style="display: none;">
+                <label for="auth_code">2FA Code</label>
+                <input type="text" id="auth_code" name="auth_code" placeholder="123456" maxlength="6">
+                <div class="small-text">Enter the 6-digit code from your trusted device</div>
+              </div>
+              
+              <div id="auth-message" class="alert" style="display: none;"></div>
+              
+              <button type="submit" class="btn">🔑 Authenticate</button>
+              <button type="button" class="btn btn-secondary" onclick="hideAuthModal()">Cancel</button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -1461,6 +1571,25 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
     function handleIOSDownloadSubmit(event) {
       event.preventDefault(); // Prevent default form submission
       
+      // Check authentication status first
+      fetch('/api/ios/auth-status')
+        .then(response => response.json())
+        .then(data => {
+          if (!data.authenticated) {
+            alert('❌ iOS authentication required!\n\nPlease authenticate with your Apple ID first by clicking the "🔑 Authenticate with Apple ID" button above.\n\nAlternatively, you can upload an IPA file using the "Upload File" tab.');
+            return;
+          }
+          
+          // Proceed with download
+          proceedWithIOSDownload(event);
+        })
+        .catch(error => {
+          console.error('Failed to check auth status:', error);
+          alert('❌ Failed to check authentication status. Please try again or use the Upload File option.');
+        });
+    }
+    
+    function proceedWithIOSDownload(event) {
       const form = event.target;
       const formData = new FormData(form);
       
@@ -1494,10 +1623,93 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
       })
       .catch(error => {
         console.error('iOS download error:', error);
-        alert('❌ iOS download failed: ' + error.message + '\n\nPlease check your bundle ID and try again.\n\nNote: Make sure ipatool is authenticated by connecting to the Docker container and running: ipatool auth login --email your-apple-id@example.com');
+        alert('❌ iOS download failed: ' + error.message + '\n\nPlease check your bundle ID and try again.\n\nIf authentication issues persist, consider using the "Upload File" tab to upload an IPA file directly.');
       })
       .finally(() => {
         // Restore button state
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+      });
+    }
+    
+    // iOS Authentication Functions
+    function checkIOSAuthStatus() {
+      fetch('/api/ios/auth-status')
+        .then(response => response.json())
+        .then(data => {
+          const statusContent = document.getElementById('auth-status-content');
+          const authBtn = document.getElementById('auth-btn');
+          
+          if (data.authenticated) {
+            statusContent.innerHTML = '<p>✅ Authenticated as: <strong>' + data.email + '</strong></p>';
+            authBtn.style.display = 'none';
+          } else {
+            statusContent.innerHTML = '<p>❌ Not authenticated. ' + (data.error ? data.error : 'Please authenticate to download iOS apps.') + '</p>';
+            authBtn.style.display = 'block';
+          }
+        })
+        .catch(error => {
+          console.error('Failed to check auth status:', error);
+          document.getElementById('auth-status-content').innerHTML = '<p>❌ Failed to check authentication status</p>';
+        });
+    }
+    
+    function showAuthModal() {
+      document.getElementById('ios-auth-modal').style.display = 'flex';
+      document.getElementById('auth_code').value = '';
+      document.getElementById('auth-code-group').style.display = 'none';
+      document.getElementById('auth-message').style.display = 'none';
+    }
+    
+    function hideAuthModal() {
+      document.getElementById('ios-auth-modal').style.display = 'none';
+    }
+    
+    function handleIOSAuthSubmit(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const formData = new FormData(form);
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      
+      submitBtn.textContent = '⏳ Authenticating...';
+      submitBtn.disabled = true;
+      
+      fetch('/api/ios/auth', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        const messageDiv = document.getElementById('auth-message');
+        messageDiv.style.display = 'block';
+        
+        if (data.success) {
+          messageDiv.className = 'alert success';
+          messageDiv.textContent = '✅ ' + data.message;
+          setTimeout(() => {
+            hideAuthModal();
+            checkIOSAuthStatus();
+          }, 2000);
+        } else {
+          messageDiv.className = 'alert error';
+          messageDiv.textContent = '❌ ' + data.message;
+          
+          if (data.needs_2fa) {
+            document.getElementById('auth-code-group').style.display = 'block';
+            document.getElementById('auth_code').focus();
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Authentication error:', error);
+        const messageDiv = document.getElementById('auth-message');
+        messageDiv.style.display = 'block';
+        messageDiv.className = 'alert error';
+        messageDiv.textContent = '❌ Authentication failed: ' + error.message;
+      })
+      .finally(() => {
         submitBtn.textContent = originalText;
         submitBtn.disabled = false;
       });
@@ -1533,6 +1745,9 @@ var indexTmpl = template.Must(template.New("index").Parse(`<!DOCTYPE html>
     document.addEventListener('DOMContentLoaded', function() {
       loadTheme();
       startJobRefresh();
+      
+      // Check iOS authentication status
+      checkIOSAuthStatus();
       
       // Check if Discord checkbox should be checked (if webhook is provided)
       const webhookInput = document.getElementById('webhook');
@@ -1852,6 +2067,108 @@ func handleDownloadIOSAsync(w http.ResponseWriter, r *http.Request) {
 		"job_id":  job.ID,
 		"status":  "started",
 		"message": "iOS download job started",
+	})
+}
+
+// handleIOSAuthStatus checks the current iOS authentication status
+func handleIOSAuthStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check if ipatool is available
+	if _, err := exec.LookPath("ipatool"); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"authenticated": false,
+			"error":         "ipatool not found",
+		})
+		return
+	}
+
+	// Check authentication status
+	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
+	if keychainPassphrase == "" {
+		keychainPassphrase = "sallam@88"
+	}
+
+	args := []string{"auth", "info", "--keychain-passphrase", keychainPassphrase, "--non-interactive"}
+	cmd := exec.Command("ipatool", args...)
+	output, err := cmd.CombinedOutput()
+
+	authenticated := err == nil && len(output) > 0
+	var email string
+	if authenticated {
+		// Extract email from output
+		outputStr := string(output)
+		if strings.Contains(outputStr, "email=") {
+			parts := strings.Split(outputStr, "email=")
+			if len(parts) > 1 {
+				emailPart := strings.Split(parts[1], " ")[0]
+				email = strings.TrimSpace(emailPart)
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"authenticated": authenticated,
+		"email":         email,
+		"error":         func() string {
+			if err != nil {
+				return string(output)
+			}
+			return ""
+		}(),
+	})
+}
+
+// handleIOSAuth handles iOS authentication with 2FA
+func handleIOSAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	email := strings.TrimSpace(r.FormValue("email"))
+	password := strings.TrimSpace(r.FormValue("password"))
+	authCode := strings.TrimSpace(r.FormValue("auth_code"))
+
+	if email == "" || password == "" {
+		http.Error(w, "email and password are required", http.StatusBadRequest)
+		return
+	}
+
+	keychainPassphrase := os.Getenv("IPATOOL_KEYCHAIN_PASSPHRASE")
+	if keychainPassphrase == "" {
+		keychainPassphrase = "sallam@88"
+	}
+
+	// Build authentication command
+	args := []string{"auth", "login", "--email", email, "--password", password}
+	if authCode != "" {
+		args = append(args, "--auth-code", authCode)
+	}
+	args = append(args, "--keychain-passphrase", keychainPassphrase)
+
+	// Execute authentication command
+	cmd := exec.Command("ipatool", args...)
+	output, err := cmd.CombinedOutput()
+
+	success := err == nil
+	var message string
+	if success {
+		message = "Authentication successful"
+	} else {
+		message = string(output)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": success,
+		"message": message,
+		"needs_2fa": strings.Contains(message, "2FA code is required"),
 	})
 }
 
